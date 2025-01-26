@@ -7,9 +7,10 @@ RUN pacman-key --init && \
     pacman-key --populate archlinux && \
     pacman -Syu --noconfirm
 
-RUN pacman -S --noconfirm act \
+RUN pacman -S --noconfirm \
+    act \
     bats-assert bats-file bats-support \
-    nodejs npm \
+    nodejs npm
 
 WORKDIR /workspace
 
