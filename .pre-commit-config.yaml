@@ -1,0 +1,134 @@
+---
+repos:
+  # ==================== General =========================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files  # avoid giant file commit accidents
+      - id: check-case-conflict  # avoid case sensitivity in file names
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: debug-statements
+      - id: double-quote-string-fixer
+      - id: name-tests-test  # follow pytest naming convention
+      - id: requirements-txt-fixer
+      - id: check-merge-conflict  # avoid lingering merge markers
+      - id: mixed-line-ending
+        args: [--fix=lf]
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.15.0
+    hooks:
+      - id: yamlfmt
+        name: YAML Formatter (yamlfmt)
+        description: Formats YAML files using Google's yamlfmt with inline configuration
+          options.
+        language: golang
+        types: [yaml]
+        args:
+          - -formatter=include_document_start=true
+          - -formatter=indent=2
+          - -formatter=max_line_length=80
+          - -formatter=pad_line_comments=2
+          - -formatter=trim_trailing_whitespace=true
+          - -formatter=eof_newline=true
+          - -formatter=gitignore_path=".gitignore"
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        name: YAML Linter (yamllint)
+        description: Lints YAML files to catch errors and ensure consistency according
+          to YAML style conventions.
+        language: python
+        types: [yaml]
+        args:
+          # make the line lengths pass
+          - -d
+          # yamllint disable-line rule:line-length
+          - "{extends: default, rules: { line-length: { max: 88, level: warning, allow-non-breakable-inline-mappings:
+            true } } }"
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+  # ============== GitHub Actions Workflows ======================
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.6
+    hooks:
+      - id: actionlint
+        name: Lint GitHub Actions workflow files
+        description: Runs actionlint to lint GitHub Actions workflow files
+        language: golang
+        types: [yaml]
+        files: ^\.github/(workflows)/
+        entry: actionlint
+        minimum_pre_commit_version: 3.0.0
+        # ============= Shell ============================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        description: Test shell scripts with shellcheck
+        entry: shellcheck
+        language: python
+        types: [shell]
+        require_serial: true  # shellcheck can detect sourcing this way
+        args: [-f, gcc]  # output filename:linenum:colnum (clickable)
+        # ============ Python ============================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.1
+    hooks:
+      - id: ruff
+        types: [python]
+        args: [--fix, --show-fixes]
+      - id: ruff-format
+        types: [python]
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.1
+    hooks:
+      - id: pyupgrade
+        name: PyUpgrade Python Syntax Updater
+        description: This hook automatically upgrades Python syntax to the latest
+          version, improving readability and ensuring compatibility with modern Python
+          features.
+        entry: pyupgrade
+        language: python
+        types: [python]
+        args: [--py39-plus]
+  - repo: https://github.com/asottile/add-trailing-comma
+    rev: v3.1.0
+    hooks:
+      - id: add-trailing-comma
+        name: Add Trailing Comma Formatter
+        description: This hook adds trailing commas where appropriate in Python code,
+          improving diffs and adhering to PEP 8 recommendations.
+        entry: add-trailing-comma
+        language: python
+        types: [python]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        name: mypy
+        description: Static type analysis
+        entry: mypy
+        language: python
+        types_or: [python, pyi]
+        args: [--ignore-missing-imports, --scripts-are-modules]
+        require_serial: true
+        minimum_pre_commit_version: 2.9.2
+        # ===================== JavaScript =============================
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.17.0
+    hooks:
+      - id: eslint
+        name: ESLint JavaScript Linter
+        description: This hook runs ESLint for linting JavaScript and TypeScript files,
+          ensuring code quality and adherence to style guides.
+        entry: eslint
+        language: node
+        files: \.[jt]sx?$  # *.js, *.jsx, *.ts and *.tsx
+        types: [file]
