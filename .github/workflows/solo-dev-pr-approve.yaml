@@ -1,0 +1,153 @@
+---
+# Filename: .github/workflows/solo-dev-pr-approve.yaml
+name: "Solo Dev PR Approval Workflow"
+on:  # yamllint disable-line rule:truthy
+  # usage: gh workflow run solo-dev-pr-approve.yaml --field pr_number=<>
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "The pull request number to be checked"
+        required: true
+        type: number
+jobs:
+  owner-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Get repository owner and actor
+        id: owner-check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          REPO_OWNER=$(gh api repos/${{ github.repository }} --jq '.owner.login')
+          echo "Repository Owner: $REPO_OWNER"
+          echo "Triggered by: ${{ github.actor }}"
+
+          if [[ "$REPO_OWNER" != "${{ github.actor }}" ]]; then
+            echo "Error: Only the repository owner can trigger this workflow."
+            exit 1
+          fi
+  pr-readiness-check:
+    runs-on: ubuntu-latest
+    needs: owner-check
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Create payload for PR details
+        id: pr-details
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          PR_NUMBER="${{ inputs.pr_number }}"
+          echo "Fetching details for PR number: $PR_NUMBER"
+
+          # Fetch PR details and save to file
+          gh pr view "$PR_NUMBER" --json state,mergeable > pr_payload.json
+
+          PR_STATE=$(jq -r '.state' pr_payload.json)
+          PR_MERGEABLE=$(jq -r '.mergeable' pr_payload.json)
+          echo "PR_STATE=$PR_STATE" >> "$GITHUB_ENV"
+          echo "PR_MERGEABLE=$PR_MERGEABLE" >> "$GITHUB_ENV"
+      - name: Validate PR state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          if [[ "$PR_STATE" != "OPEN" ]]; then
+            echo "Error: PR is not open for review."
+            exit 1
+          fi
+
+          if [[ "$PR_MERGEABLE" != "MERGEABLE" ]]; then
+            ERROR_MSG="Error: PR is not in a mergeable state \
+            (possible conflicts or missing checks)."
+            echo "$ERROR_MSG"
+            exit 1
+          else
+            echo "PR is ready for review!"
+          fi
+  check-reviewer-count:
+    runs-on: ubuntu-latest
+    needs: pr-readiness-check
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Get the number of reviewers
+        id: reviewer-count
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          REVIEWERS=$(gh api -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/collaborators?affiliation=direct" \
+            --jq '[.[] | select(.permissions.push == true)] | length')
+          echo "REVIEWER_COUNT=$REVIEWERS" >> "$GITHUB_ENV"
+      - name: Validate reviewer count
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |-
+          if [[ "$REVIEWER_COUNT" -gt 1 ]]; then
+            echo "There are multiple reviewers. Manual review is required."
+            exit 1
+          else
+            echo "Solo developer detected. Proceeding with auto-approval."
+          fi
+  auto-approve-pr:
+    runs-on: ubuntu-latest
+    needs: check-reviewer-count
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Generate JWT and Installation Token
+        id: generate-token
+        env:
+          PRIVATE_KEY: ${{ secrets.AUTO_APPROVE_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.AUTO_APPROVE_APP_ID }}
+          GH_TOKEN: ${{ github.token }}
+        # yamllint disable-line rule:line-length
+        run: |-
+          echo "$PRIVATE_KEY" > private-key.pem
+          chmod 600 private-key.pem
+
+          HEADER=$(echo -n '{"alg":"RS256","typ":"JWT"}' | base64 | tr -d '=')
+          ISSUED_AT=$(date +%s)
+          EXPIRATION=$((ISSUED_AT + 600))
+
+          PAYLOAD=$(echo -n "{\"iat\":$ISSUED_AT,\"exp\":$EXPIRATION,\"iss\":$APP_ID}" | base64 | tr -d '=')
+
+          # yamllint disable-line rule:line-length
+          SIGNATURE=$(printf "%s.%s" "$HEADER" "$PAYLOAD" | openssl dgst -binary -sha256 \
+            -sign private-key.pem | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+
+          JWT="$HEADER.$PAYLOAD.$SIGNATURE"
+
+          INSTALLATION_ID=$(gh api /app/installations -H "Authorization: Bearer $JWT" \
+            --jq '.[] | select(.account.login == "'${{ github.repository_owner }}'").id')
+          TOKEN=$(gh api --method POST "/app/installations/$INSTALLATION_ID/access_tokens" \
+            -H "Authorization: Bearer $JWT" \
+            -H "Accept: application/vnd.github+json" | jq -r '.token')
+
+          # Set the GitHub CLI token to use the generated installation token
+          echo "APP_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "GH_TOKEN=$TOKEN" >> "$GITHUB_ENV"  # To make gh cli recognize the token
+      - name: Approve the pull request
+        env:
+          GH_TOKEN: ${{ env.APP_TOKEN }}
+        run: |-
+          PR_NUMBER="${{ inputs.pr_number }}"
+          ACTOR="${{ github.actor }}"
+          REPO_NAME="${{ github.repository }}"
+          WORKFLOW_FILE="solo-dev-pr-approve.yaml"
+
+          echo "Approving pull request #$PR_NUMBER"
+          BODY="User: $ACTOR issued 'gh workflow run $WORKFLOW_FILE --field pr_number=$PR_NUMBER'.
+          This workflow determined that this PR is qualified for automatic approval.
+          Approval has been granted by the installed GitHub App 'Auto Approve PRs' to satisfy branch protection rules requiring PR approval."
+
+          # Confirm token availability
+          echo "APP_TOKEN is set: ${APP_TOKEN:+"Yes"}"
+
+          # Run the approval command
+          if ! gh pr review "$PR_NUMBER" --approve --body "$BODY" --repo "$REPO_NAME"; then
+            echo "Failed to auto-approve the PR. Check logs for details."
+            exit 1
+          fi
