@@ -1,0 +1,133 @@
+# Exclude backup files
+*~ #nano backups
+*.bak
+*.old
+*.backup
+passwd-
+shadow-
+group-
+gshadow-
+
+# Exclude sensitive files (passwords and security risks)
+passwd
+shadow
+group
+gshadow
+trusted-key.key
+
+# Exclude SSH host keys (security risk to commit these)
+ssh/ssh_host_*
+
+# Exclude system-specific or dynamically generated files
+hostname
+hosts
+resolv.conf
+fstab
+mtab
+network/interfaces
+machine-id
+
+# Exclude logs or runtime files
+cron.d/*.lock
+cron.d/*.pid
+logrotate.status
+logrotate.d/*
+
+# Exclude temporary or configuration files from specific services
+pacman.d/*
+logrotate.d/*
+systemd/*
+tmpfiles.d/*
+udev/*
+bash.bash_logout
+bash.bashrc
+nanorc
+inputrc
+profile
+profile.d/*
+
+# Exclude user-specific or session-specific configurations
+skel/*
+bash.bashrc
+bash.bash_logout
+
+# Exclude miscellaneous and dynamically generated configuration files
+exports
+exports.d/*
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore editor and IDE backup files
+*~
+*.swp
+logs/
+*.log
+
+# Ignore compiled files or binaries
+*.o
+*.out
+*.a
+*.so
+*.exe
+
+# Ignore systemd state
+*.pid
+*.lock
+
+# Ignore temporary files generated during development
+tmp/
+*.tmp
+
+# Ignore Python bytecode and byte-compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments and direnv
+.venv/
+env/
+venv/
+.envrc
+
+# Ignore Poetry lock file (if working on a library)
+poetry.lock
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore IDE specific configurations (e.g., VSCode, PyCharm)
+.vscode/
+.idea/
+
+# Ignore temporary archive or compression files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.7z
+
+# Ignore docker and container files
+.dockerignore
+docker-compose.override.yml
+
+# Terraform and Cloud Infrastructure
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Sensitive configs and env files:
+.env
+.env.local
+
+# Generated Files
+/dist/
+/target/
+
+# Binaries for different environments
+*.dll
+*.dylib
