@@ -1,0 +1,54 @@
+---
+# Filename: .github/workflows/non-default-branch-protection.yaml
+name: "Non-Default Branch Protections"
+on:
+  push:
+    branches-ignore:
+      - main
+  create:
+  workflow_dispatch:
+jobs:
+  set-non-default-branch-protections:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set Non-Default Branch Protections
+        if: github.ref != 'refs/heads/main'  # Avoid running on the main branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |-
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          echo "Setting branch protection for branch: ${BRANCH}"
+
+          STATUS_CHECKS_JSON=$(jq -n '{strict: false, contexts: []}')
+
+          # Set PR reviews to null if not required
+          PR_REVIEWS_JSON=$(jq -n 'null')
+
+          # Restrictions must be an object with empty arrays for users and teams
+          RESTRICTIONS=null
+
+          BRANCH_PROTECTION_PAYLOAD=$(jq -n \
+            --argjson status_checks "$STATUS_CHECKS_JSON" \
+            --argjson reviews "$PR_REVIEWS_JSON" \
+            --argjson restrictions "$RESTRICTIONS" \
+            '{
+              required_status_checks: $status_checks,
+              enforce_admins: false,
+              required_pull_request_reviews: $reviews,
+              restrictions: $restrictions,
+              allow_force_pushes: true,
+              allow_deletions: true,
+              required_linear_history: false
+            }'
+          )
+
+          echo "$BRANCH_PROTECTION_PAYLOAD" > payload.json
+
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "/repos/${{ github.repository }}/branches/${BRANCH}/protection" \
+            --input payload.json

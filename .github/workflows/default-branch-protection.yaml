@@ -1,0 +1,61 @@
+---
+name: Set Default Branch Protections
+on:
+  push:
+    branches:
+      - main  # Ensures branch protection settings are reapplied when main is updated
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened  # Trigger when a PR to main is opened or reopened
+  workflow_dispatch:  # Manual trigger for extra flexibility
+jobs:
+  set-default-branch-protections:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set Default Branch Protections
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: |-
+          BRANCH="${{ github.event.repository.default_branch }}"
+
+          # Create JSON payloads for branch protection settings
+          STATUS_CHECKS_JSON=$(jq -n '{
+            strict: true,
+            contexts: ["Super Linter"]
+          }')
+
+          PR_REVIEWS_JSON=$(jq -n '{
+            required_approving_review_count: 1,
+            dismiss_stale_reviews: true
+          }')
+
+          RESTRICTIONS=null  # No user restrictions
+
+          # Full branch protection payload
+          BRANCH_PROTECTION_PAYLOAD=$(jq -n \
+            --argjson status_checks "$STATUS_CHECKS_JSON" \
+            --argjson reviews "$PR_REVIEWS_JSON" \
+            --argjson restrictions "$RESTRICTIONS" \
+            '{
+              required_status_checks: $status_checks,
+              enforce_admins: true,
+              required_pull_request_reviews: $reviews,
+              restrictions: $restrictions,
+              allow_force_pushes: false,
+              allow_deletions: false,
+              required_linear_history: true
+            }'
+          )
+
+          # Save payload to file for gh api input
+          echo "$BRANCH_PROTECTION_PAYLOAD" > payload.json
+
+          echo "Setting branch protection for branch: ${BRANCH}"
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/branches/${BRANCH}/protection" \
+            --input payload.json
