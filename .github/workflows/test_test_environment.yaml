@@ -1,0 +1,20 @@
+---
+# Filename: .github/workflows/test_test_environment.yaml
+name: Test Test Environment Workflow
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:  # usage: gh workflow run <workflow_name> --ref <branch_name>
+jobs:
+  setup-test-env-and-test-bats-common-setup:
+    runs-on: ubuntu-latest
+    container:
+      image: robertportelli/test-readiluks:latest
+    steps:
+      - name: Check out Code
+        uses: actions/checkout@v4
+      - name: Run BATS Tests
+        run: bats test/test_common_setup.bats

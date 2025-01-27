@@ -39,6 +39,7 @@ jobs:
           VALIDATE_ALL_CODEBASE: false  # Limits linting to modified files
           VALIDATE_BASH: true
           VALIDATE_BASH_EXEC: true
+          BASH_EXEC_IGNORE_LIBRARIES: true
           VALIDATE_SHELLCHECK: true
           VALIDATE_SHELLFMT: true
           VALIDATE_GITHUB_ACTIONS: true
