@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Filename: test/test_helpers/_common_setup.bash
 
 _common_setup() {
