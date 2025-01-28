@@ -76,7 +76,7 @@ repos:
         language: python
         types: [shell]
         require_serial: true  # shellcheck can detect sourcing this way
-        args: [-f, gcc]  # output filename:linenum:colnum (clickable)
+        args: [-f, gcc, -x]  # output filename:linenum:colnum (clickable)
         # ============ Python ============================
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.1
