@@ -1,4 +1,3 @@
-# shellcheck disable=SC2034
 # Filename: lib/arg_parse.bash
 # Description:
 # Purpose:
@@ -8,7 +7,7 @@
 # Requirements:
 # Author:
 #   Robert Portelli
-#   Repository: https://github.com/robert-portelli/devops-bootstrap
+#   Repository: https://github.com/robert-portelli/readiluks
 # Version:
 #   See repository tags or release notes.
 # License:
@@ -23,7 +22,8 @@ parse_arguments() {
             --log-level)
                 shift
                 if [[ -n "$1" ]] && [[ "${LOG_LEVELS[$1]}" ]]; then
-                    LOG_LEVEL="$1"
+                    # shellcheck disable=SC2153
+                    config[LOG_LEVEL]="$1"
                     shift
                 else
                     echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR."
@@ -31,13 +31,14 @@ parse_arguments() {
                 fi
                 ;;
             --log-to-console)
-                LOG_TO_CONSOLE=true
+                config[LOG_TO_CONSOLE]=true
                 shift
                 ;;
             --bats-flags)
                 shift
                 if [[ -n "$1" ]]; then
-                    BATS_FLAGS="$1"
+                    # shellcheck disable=SC2034
+                    config[BATS_FLAGS]="$1"
                     shift
                 else
                     echo "Error: No flags provided after --bats-flags."
