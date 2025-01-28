@@ -36,3 +36,13 @@ lm() {
         fi
     fi
 }
+
+log_config() {
+    if [[ "$(declare -p CONFIG 2>/dev/null)" =~ "declare -A" ]]; then
+        for key in "${!CONFIG[@]}"; do
+            lm DEBUG "CONFIG[$key] = ${CONFIG[$key]}"
+        done
+    else
+        lm ERROR "CONFIG is not defined or not an associative array."
+    fi
+}
