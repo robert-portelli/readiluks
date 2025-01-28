@@ -22,8 +22,8 @@ declare -A config=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 )
 
-source "${config[BASE_DIR]}/lib/parse_args.bash"
-source "${config[BASE_DIR]}/lib/log_output.bash"
+source "${config[BASE_DIR]}/src/lib/parse_prod_args.bash"
+source "${config[BASE_DIR]}/src/lib/log_prod_output.bash"
 
 main() {
     parse_arguments "$@"
