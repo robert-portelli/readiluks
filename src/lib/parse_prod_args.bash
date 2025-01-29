@@ -31,27 +31,17 @@ parse_arguments() {
                 fi
                 ;;
             --log-to-console)
+                #shellcheck disable=SC2034
                 config[LOG_TO_CONSOLE]=true
                 shift
                 ;;
-            --bats-flags)
-                shift
-                if [[ -n "$1" ]]; then
-                    # shellcheck disable=SC2034
-                    config[BATS_FLAGS]="$1"
-                    shift
-                else
-                    echo "Error: No flags provided after --bats-flags."
-                    exit 1
-                fi
-                ;;
             --help|-h)
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console] [--bats-flags '<flags>']"
+                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
                 exit 0
                 ;;
             *)
                 echo "Unknown option: $1"
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console] [--bats-flags '<flags>']"
+                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
                 exit 1
                 ;;
         esac
