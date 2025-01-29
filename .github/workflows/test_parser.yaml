@@ -39,13 +39,18 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             echo "PR Trigger detected: Using default CI bats-flags: --tap"
             bats --tap test/unit/test_parser.bats
-          elif [[ "${{ github.event.inputs.bats-flags }}" == "" ]]; then
-            echo "Manual Trigger detected: Running BATS with no flags"
-            bats test/unit/test_parser.bats
-          elif [[ -z "$BATS_FLAGS" ]]; then
-            echo "Manual Trigger detected: Running BATS with default flags"
-            bats --verbose-run --show-output-of-passing-tests --timing test/unit/test_parser.bats
           else
-            echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
-            bats "$BATS_FLAGS" test/unit/test_parser.bats
+            if [[ -z "$BATS_FLAGS" ]]; then
+              BATS_FLAGS="--verbose-run --show-output-of-passing-tests --timing"
+              echo "Manual Trigger detected: Running BATS with flags: $BATS_FLAGS"
+            elif [[ "$BATS_FLAGS" == "none" ]]; then
+              echo "Manual Trigger detected without --bats-flags"
+              bats test/unit/test_parser.bats
+              exit 0
+            else
+              echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
+            fi
+
+            set -- "$BATS_FLAGS"  # Unpack flags
+            bats "$@" test/unit/test_parser.bats
           fi
