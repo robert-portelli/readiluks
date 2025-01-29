@@ -28,14 +28,24 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Run BATS Tests
+      - name: Run Production Argument Parser BATS Tests
         env:
-          BATS_FLAGS: ${{ github.event.inputs.bats-flags }}  # Set BATS_FLAGS if provided
+          BATS_FLAGS: ${{ github.event.inputs.bats-flags }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |-
-          if [[ -z "$BATS_FLAGS" ]]; then
-            echo "Unit testing test/parser_test.bats with default CI bats-flags: --tap"
-            bats --tap test/unit/parser_test.bats
+          echo "BATS_FLAGS value: '${BATS_FLAGS}'"
+          echo "GITHUB_EVENT_NAME: '${GITHUB_EVENT_NAME}'"
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "PR Trigger detected: Using default CI bats-flags: --tap"
+            bats --tap test/unit/test_parser.bats
+          elif [[ "${{ github.event.inputs.bats-flags }}" == "" ]]; then
+            echo "Manual Trigger detected: Running BATS with no flags"
+            bats test/unit/test_parser.bats
+          elif [[ -z "$BATS_FLAGS" ]]; then
+            echo "Manual Trigger detected: Running BATS with default flags"
+            bats --verbose-run --show-output-of-passing-tests --timing test/unit/test_parser.bats
           else
-            echo "Unit testing test/parser_test.bats with bats-flags: $BATS_FLAGS"
-            bats "$BATS_FLAGS" test/parser_test.bats
+            echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
+            bats "$BATS_FLAGS" test/unit/test_parser.bats
           fi
