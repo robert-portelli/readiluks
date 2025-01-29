@@ -1,0 +1,41 @@
+---
+# Filename: .github/workflows/test_parser.yaml
+# Manual usage:
+#  # with defaults:
+#    # gh workflow run test-parser
+#  # override defaults:
+#    # gh workflow run test-parser --input bats-flags="--timing"
+#  # run without bats flags
+#    # gh workflow run test-parser --input bats-flags=""
+name: Test Production Parser
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      bats-flags:
+        description: "Flags to pass to BATS"
+        required: false
+        default: "--verbose-run --show-output-of-passing-tests --timing"
+jobs:
+  test-parser:
+    runs-on: ubuntu-latest
+    container:
+      image: robertportelli/test-readiluks:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run BATS Tests
+        env:
+          BATS_FLAGS: ${{ github.event.inputs.bats-flags }}  # Set BATS_FLAGS if provided
+        run: |-
+          if [[ -z "$BATS_FLAGS" ]]; then
+            echo "Testing test/parser_test.bats with default CI bats-flags: --tap"
+            bats --tap test/parser_test.bats
+          else
+            echo "Testing test/parser_test.bats with bats-flags: $BATS_FLAGS"
+            bats "$BATS_FLAGS" test/parser_test.bats
+          fi
