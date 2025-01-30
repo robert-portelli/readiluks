@@ -23,7 +23,7 @@ declare -A config=(
 
 load_libraries() {
     source "${config[BASE_DIR]}/src/lib/_parser.bash"
-    source "${config[BASE_DIR]}/src/lib/log_prod_output.bash"
+    source "${config[BASE_DIR]}/src/lib/_logger.bash"
 }
 
 main() {
