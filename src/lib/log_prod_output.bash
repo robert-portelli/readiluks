@@ -16,7 +16,7 @@
 #   See repository commit history (e.g., `git log`).
 
 # Define log levels
-declare -A LOG_LEVELS=(
+declare -gA LOG_LEVELS=(
     [DEBUG]=0
     [INFO]=1
     [WARNING]=2
