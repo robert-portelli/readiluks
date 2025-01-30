@@ -24,16 +24,16 @@ parse_arguments() {
                 if [[ -n "$1" ]] && [[ "${LOG_LEVELS[$1]}" ]]; then
                     # shellcheck disable=SC2153
                     config[LOG_LEVEL]="$1"
-                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&3
+                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&4
                     shift
                 else
-                    echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR."
+                    echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR." >&2
                     return 1
                 fi
                 ;;
             --log-to-console)
                 config[LOG_TO_CONSOLE]=true
-                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&3
+                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&4
                 shift
                 ;;
             --help|-h)
@@ -42,7 +42,7 @@ parse_arguments() {
                 ;;
             *)
                 echo "Unknown option: $1"
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
+                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]" >&2
                 return 1
                 ;;
         esac
