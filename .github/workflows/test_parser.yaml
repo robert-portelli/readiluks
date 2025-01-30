@@ -1,0 +1,91 @@
+---
+# Filename: .github/workflows/test_parser.yaml
+# Manual usage:
+#  # with defaults:
+#    # gh workflow run test-parser
+#  # override defaults:
+#    # gh workflow run test-parser --input bats-flags="--timing"
+#  # run without bats flags
+#    # gh workflow run test-parser --input bats-flags=""
+name: Test Production Parser
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      bats-flags:
+        description: "Flags to pass to BATS"
+        required: false
+        default: "--verbose-run --show-output-of-passing-tests --timing"
+jobs:
+  unit-test-parser:
+    runs-on: ubuntu-latest
+    container:
+      image: robertportelli/test-readiluks:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run Production Argument Parser Unit BATS Tests
+        env:
+          BATS_FLAGS: ${{ github.event.inputs.bats-flags }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |-
+          echo "BATS_FLAGS value: '${BATS_FLAGS}'"
+          echo "GITHUB_EVENT_NAME: '${GITHUB_EVENT_NAME}'"
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "PR Trigger detected: Using default CI bats-flags: --tap"
+            bats --tap test/unit/test_parser.bats
+          else
+            if [[ -z "$BATS_FLAGS" ]]; then
+              BATS_FLAGS="--verbose-run --show-output-of-passing-tests --timing"
+              echo "Manual Trigger detected: Running BATS with flags: $BATS_FLAGS"
+            elif [[ "$BATS_FLAGS" == "none" ]]; then
+              echo "Manual Trigger detected without --bats-flags"
+              bats test/unit/test_parser.bats
+              exit 0
+            else
+              echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
+            fi
+
+            # shellcheck disable=SC2086
+            set -- $BATS_FLAGS  # Unpack flags
+            bats "$@" test/unit/test_parser.bats
+          fi
+  integration-test-parser:
+    runs-on: ubuntu-latest
+    container:
+      image: robertportelli/test-readiluks:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Run Production Argument Parser Integration BATS Tests
+        env:
+          BATS_FLAGS: ${{ github.event.inputs.bats-flags }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |-
+          echo "BATS_FLAGS value: '${BATS_FLAGS}'"
+          echo "GITHUB_EVENT_NAME: '${GITHUB_EVENT_NAME}'"
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "PR Trigger detected: Using default CI bats-flags: --tap"
+            bats --tap test/integration/test_parser.bats
+          else
+            if [[ -z "$BATS_FLAGS" ]]; then
+              BATS_FLAGS="--verbose-run --show-output-of-passing-tests --timing"
+              echo "Manual Trigger detected: Running BATS with flags: $BATS_FLAGS"
+            elif [[ "$BATS_FLAGS" == "none" ]]; then
+              echo "Manual Trigger detected without --bats-flags"
+              bats test/integration/test_parser.bats
+              exit 0
+            else
+              echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
+            fi
+
+            # shellcheck disable=SC2086
+            set -- $BATS_FLAGS  # Unpack flags
+            bats "$@" test/integration/test_parser.bats
+          fi

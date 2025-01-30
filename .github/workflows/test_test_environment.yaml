@@ -9,7 +9,7 @@ on:  # yamllint disable-line rule:truthy
       - reopened
   workflow_dispatch:  # usage: gh workflow run <workflow_name> --ref <branch_name>
 jobs:
-  setup-test-env-and-test-bats-common-setup:
+  test-bats-common-setup:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
