@@ -22,13 +22,7 @@ declare -A config=(
 )
 
 load_libraries() {
-    # Load the appropriate parser
-    if [[ -n "$USE_TEST_PARSER" ]]; then
-        source "${config[BASE_DIR]}/test/lib/parse_test_args.bash"
-    else
-        source "${config[BASE_DIR]}/src/lib/parse_prod_args.bash"
-    fi
-
+    source "${config[BASE_DIR]}/src/lib/_parser.bash"
     source "${config[BASE_DIR]}/src/lib/log_prod_output.bash"
 }
 
