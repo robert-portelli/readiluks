@@ -21,10 +21,19 @@ declare -A config=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 )
 
-source "${config[BASE_DIR]}/src/lib/parse_prod_args.bash"
-source "${config[BASE_DIR]}/src/lib/log_prod_output.bash"
+load_libraries() {
+    # Load the appropriate parser
+    if [[ -n "$USE_TEST_PARSER" ]]; then
+        source "${config[BASE_DIR]}/test/lib/parse_test_args.bash"
+    else
+        source "${config[BASE_DIR]}/src/lib/parse_prod_args.bash"
+    fi
+
+    source "${config[BASE_DIR]}/src/lib/log_prod_output.bash"
+}
 
 main() {
+    load_libraries
     parse_arguments "$@"
 }
 
