@@ -1,33 +1,33 @@
-# Filename: test/lib/parse_test_args.sh
-
-# Resolve BASE_DIR relative to this script
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-# Source the production parser
-source "${BASE_DIR}/src/lib/parse_prod_args.bash"
-
-parse_test_arguments() {
-    local args=()
-
-    # Filter out test-specific arguments before calling parse_arguments
+# Filename: test/lib/parse_test_args.bash
+parse_arguments() {
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
-            --debug-config) ;;  # Ignore it for now, handle it later
-            *) args+=("$1") ;;   # Collect all other arguments
-        esac
-        shift
-    done
-
-    # Call the production parser with filtered arguments
-    parse_arguments "${args[@]}"
-
-    # Handle test-specific arguments after production parser runs
-    for arg in "$@"; do
-        case "$arg" in
+            --log-level)
+                shift
+                if [[ -n "$1" ]]; then
+                    config[LOG_LEVEL]="$1"
+                    shift
+                else
+                    echo "ERROR: Invalid log level" >&2
+                    return 1
+                fi
+                ;;
+            --log-to-console)
+                config[LOG_TO_CONSOLE]=true
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
+                return 0
+                ;;
             --debug-config)
                 echo "LOG_LEVEL=${config[LOG_LEVEL]}"
                 echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}"
                 exit 0
+                ;;
+            *)
+                echo "ERROR: Unknown option: $1" >&2
+                return 1
                 ;;
         esac
     done
