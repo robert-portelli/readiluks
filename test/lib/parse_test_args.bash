@@ -7,37 +7,28 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${BASE_DIR}/src/lib/parse_prod_args.bash"
 
 parse_test_arguments() {
-    # Process test-specific arguments first
-    local remaining_args=()
+    local args=()
 
+    # Filter out test-specific arguments before calling parse_arguments
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
-            --bats-flags)
-                shift
-                if [[ -n "$1" ]]; then
-                    # shellcheck disable=SC2034
-                    CONFIG[BATS_FLAGS]="$1"
-                    shift
-                else
-                    echo "Error: No flags provided after --bats-flags."
-                    exit 1
-                fi
-                ;;
-            --help|-h)
-                # Extend help message to include test-specific flags
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console] [--bats-flags '<flags>']"
+            --debug-config) ;;  # Ignore it for now, handle it later
+            *) args+=("$1") ;;   # Collect all other arguments
+        esac
+        shift
+    done
+
+    # Call the production parser with filtered arguments
+    parse_arguments "${args[@]}"
+
+    # Handle test-specific arguments after production parser runs
+    for arg in "$@"; do
+        case "$arg" in
+            --debug-config)
+                echo "LOG_LEVEL=${config[LOG_LEVEL]}"
+                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}"
                 exit 0
-                ;;
-            *)
-                # Collect unknown arguments to pass to the production parser
-                remaining_args+=("$1")
-                shift
                 ;;
         esac
     done
-
-    # Pass the remaining arguments to the production parser
-    if [[ ${#remaining_args[@]} -gt 0 ]]; then
-        parse_prod_arguments "${remaining_args[@]}"
-    fi
 }
