@@ -61,14 +61,20 @@ test_parse_prod_args_workflow() {
 }
 
 unit_test_parse_prod_args() {
-    gh act workflow_dispatch -j "test-parser"
+    gh act workflow_dispatch -j "unit-test-parser"
     #gh act workflow_dispatch -j "test-parser" --input bats-flags="none"
+}
+
+integration_test_parse_prod_args() {
+    #gh act workflow_dispatch -j "integration-test-parser" --input bats-flags="--verbose-run"
+    gh act workflow_dispatch -j "integration-test-parser"
 }
 
 run_tests() {
     #test_common_setup
     #test_parse_prod_args_workflow
-    unit_test_parse_prod_args
+    #unit_test_parse_prod_args
+    integration_test_parse_prod_args
 
 }
 
