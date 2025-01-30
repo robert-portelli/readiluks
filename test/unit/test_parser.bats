@@ -3,7 +3,7 @@
 function setup {
     load '../lib/_common_setup'
     # Load the argument parser
-    source src/lib/parse_prod_args.bash
+    source src/lib/_parser.bash
 
     _common_setup
 
