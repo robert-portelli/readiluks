@@ -27,7 +27,7 @@ parse_arguments() {
                     shift
                 else
                     echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR."
-                    exit 1
+                    return 1
                 fi
                 ;;
             --log-to-console)
@@ -37,13 +37,14 @@ parse_arguments() {
                 ;;
             --help|-h)
                 echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
-                exit 0
+                return 0
                 ;;
             *)
                 echo "Unknown option: $1"
                 echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
-                exit 1
+                return 1
                 ;;
         esac
     done
+    return 0
 }
