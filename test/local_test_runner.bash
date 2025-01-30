@@ -28,8 +28,6 @@ declare -A CONFIG=(
     [TESTS]=""
 )
 
-source "${CONFIG[BASE_DIR]:?}"/test/lib/parse_test_args.bash
-source "${CONFIG[BASE_DIR]:?}"/test/lib/log_test_output.bash
 
 cleanup() {
     local containers
