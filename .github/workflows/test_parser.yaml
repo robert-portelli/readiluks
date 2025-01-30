@@ -51,6 +51,7 @@ jobs:
               echo "Manual Trigger detected: Running BATS with bats-flags: $BATS_FLAGS"
             fi
 
-            set -- "$BATS_FLAGS"  # Unpack flags
+            # shellcheck disable=SC2086
+            set -- $BATS_FLAGS  # Unpack flags
             bats "$@" test/unit/test_parser.bats
           fi
