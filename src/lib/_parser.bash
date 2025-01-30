@@ -24,7 +24,7 @@ parse_arguments() {
                 if [[ -n "$1" ]] && [[ "${LOG_LEVELS[$1]}" ]]; then
                     # shellcheck disable=SC2153
                     config[LOG_LEVEL]="$1"
-                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&4
+                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&2
                     shift
                 else
                     echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR." >&2
@@ -33,7 +33,7 @@ parse_arguments() {
                 ;;
             --log-to-console)
                 config[LOG_TO_CONSOLE]=true
-                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&4
+                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&2
                 shift
                 ;;
             --help|-h)
