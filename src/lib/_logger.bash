@@ -15,13 +15,10 @@
 # Last Updated:
 #   See repository commit history (e.g., `git log`).
 
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 # Define log levels
-declare -gA LOG_LEVELS=(
-    [DEBUG]=0
-    [INFO]=1
-    [WARNING]=2
-    [ERROR]=3
-)
+source "$BASE_DIR/src/lib/_log_levels.bash"
 
 # Log message function
 lm() {
