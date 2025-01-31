@@ -33,6 +33,7 @@ parse_arguments() {
                     json|human)
                         config[LOG_FORMAT]="$1"
                         echo "LOG_FORMAT=${config[LOG_FORMAT]}"  # for integration testing
+                        shift
                         ;;
                     *)
                         echo "ERROR: Invalid value for --log-format: '$1'. Must be 'json' or 'human'." >&2
