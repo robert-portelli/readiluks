@@ -19,6 +19,26 @@
 parse_arguments() {
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
+            --log-format)
+                shift
+                # ensure the default is set
+                # shellcheck disable=SC2153
+                config[LOG_FORMAT]="${config[LOG_FORMAT]:-json}"
+
+                # normalize the flag before matching
+                local log_format
+                log_format=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+
+                case "$log_format" in
+                    json|human)
+                        config[LOG_FORMAT]="$1"
+                        ;;
+                    *)
+                        echo "ERROR: Invalid value for --log-format: '$1'. Must be 'json' or 'human'." >&2
+                        exit 1
+                        ;;
+                esac
+                ;;
             --log-level)
                 shift
                 if [[ -n "$1" ]] && [[ "${LOG_LEVELS[$1]}" ]]; then
@@ -48,4 +68,14 @@ parse_arguments() {
         esac
     done
     return 0
+}
+
+log_config() {
+    if [[ "$(declare -p config 2>/dev/null)" =~ "declare -A" ]]; then
+        for key in "${!config[@]}"; do
+            lm DEBUG "config[$key] = ${config[$key]}"
+        done
+    else
+        lm ERROR "config is not defined or not an associative array."
+    fi
 }
