@@ -31,7 +31,7 @@ parse_arguments() {
 
                 case "$log_format" in
                     json|human)
-                        config[LOG_FORMAT]="$1"
+                        config[LOG_FORMAT]="$log_format"
                         echo "LOG_FORMAT=${config[LOG_FORMAT]}"  # for integration testing
                         shift
                         ;;
