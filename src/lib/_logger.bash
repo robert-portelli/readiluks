@@ -27,13 +27,24 @@ declare -gA LOG_LEVELS=(
 lm() {
     local level=$1
     local message=$2
+    local timestamp log_entry
 
     # shellcheck disable=SC2153
     if (( LOG_LEVELS[$level] >= LOG_LEVELS[$LOG_LEVEL] )); then
-        logger -t "readiluks-$level" "$message"
-        if [[ "$LOG_TO_CONSOLE" == true ]]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $message"
-        fi
+        # shellcheck disable=SC2154
+        case "${config[LOG_FORMAT]}" in
+            json)
+                timestamp="$(date --iso-8601=seconds)"
+                log_entry="{\"timestamp\":\"$timestamp\",\"level\":\"$level\",\"message\":\"$message\"}"
+                logger -t "readiluks-$level" -- "$log_entry"
+            ;;
+            human)
+                log_entry="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $message"
+                logger -t "readiluks-$level" -- "$log_entry"
+            ;;
+        esac
+
+        [[ "$LOG_TO_CONSOLE" == true ]] && echo "$log_entry"
     fi
 }
 
