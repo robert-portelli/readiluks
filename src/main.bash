@@ -19,6 +19,7 @@ declare -A config=(
     [LOG_LEVEL]="INFO"  # Default log level
     [LOG_TO_CONSOLE]=false  # Default: don't log to console
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    [LOG_FORMAT]="json"
 )
 
 load_libraries() {
