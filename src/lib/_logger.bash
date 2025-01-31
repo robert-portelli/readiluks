@@ -1,4 +1,4 @@
-# Filename: src/lib/log_prod_output.bash
+# Filename: src/lib/_logger.bash
 # Description:
 # Purpose:
 # Options:
