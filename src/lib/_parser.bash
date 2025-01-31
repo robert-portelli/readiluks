@@ -32,6 +32,7 @@ parse_arguments() {
                 case "$log_format" in
                     json|human)
                         config[LOG_FORMAT]="$1"
+                        echo "LOG_FORMAT=${config[LOG_FORMAT]}"  # for integration testing
                         ;;
                     *)
                         echo "ERROR: Invalid value for --log-format: '$1'. Must be 'json' or 'human'." >&2
@@ -44,7 +45,7 @@ parse_arguments() {
                 if [[ -n "$1" ]] && [[ "${LOG_LEVELS[$1]}" ]]; then
                     # shellcheck disable=SC2153
                     config[LOG_LEVEL]="$1"
-                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&2
+                    echo "LOG_LEVEL=${config[LOG_LEVEL]}" >&2  # for integration testing
                     shift
                 else
                     echo "Invalid log level: $1. Valid options are: DEBUG, INFO, WARNING, ERROR." >&2
@@ -53,7 +54,7 @@ parse_arguments() {
                 ;;
             --log-to-console)
                 config[LOG_TO_CONSOLE]=true
-                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&2
+                echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&2 # for integration testing
                 shift
                 ;;
             --help|-h)
