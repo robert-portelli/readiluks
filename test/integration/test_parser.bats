@@ -14,6 +14,56 @@ function setup {
     assert_success
 }
 
+##### _parser --log-format
+@test "--log-format sets valid value in _main_config" {
+    run bash "$SCRIPT_PATH" --log-format human
+    assert_success
+    assert_output -p "LOG_FORMAT=human"
+}
+
+@test "--log-format prevents invalid values in _main_config" {
+    run bash "$SCRIPT_PATH" --log-format invalid
+    assert_failure
+    assert_output -p "Invalid value for --log-format: 'invalid'"
+}
+
+@test "--log-format requires valid value if passed" {
+    run bash "$SCRIPT_PATH" --log-format
+    assert_failure
+    assert_output -p "Invalid value for --log-format"
+}
+
+@test "--log-format normalizes valid values" {
+    run bash "$SCRIPT_PATH" --log-format hUmAN
+    assert_success
+    assert_output -p "LOG_FORMAT=human"
+
+    run bash "$SCRIPT_PATH" --log-format JSon
+    assert_success
+    assert_output -p "LOG_FORMAT=json"
+}
+
+@test "--log-format does not normalize invalid values" {
+    run bash "$SCRIPT_PATH" --log-format iNVAliD
+    assert_failure
+    assert_output -p "ERROR: Invalid value for --log-format: 'iNVAliD'."
+}
+
+@test "--log-format can be passed with other valid flags" {
+    run bash "$SCRIPT_PATH" --log-format human --log-to-console --log-level WARNING
+    assert_success
+    assert_output -p "LOG_FORMAT=human"
+    assert_output -p "LOG_TO_CONSOLE=true"
+    assert_output -p "LOG_LEVEL=WARNING"
+}
+
+@test "--log-format uses last provided value" {
+    run bash "$SCRIPT_PATH" --log-format human --log-format json
+    assert_success
+    assert_output -p "LOG_FORMAT=json"
+}
+
+######## _parser --log-to-console
 @test "Valid --log-to-console sets config[LOG_TO_CONSOLE]=true" {
     run bash "$SCRIPT_PATH" --log-to-console
     assert_success

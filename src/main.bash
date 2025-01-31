@@ -15,18 +15,19 @@
 # Last Updated:
 #   See repository commit history (e.g., `git log`).
 
-declare -A config=(
-    [LOG_LEVEL]="INFO"  # Default log level
-    [LOG_TO_CONSOLE]=false  # Default: don't log to console
-    [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-)
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+load_config() {
+    source "${BASE_DIR}/src/lib/_main_config.bash"
+}
 
 load_libraries() {
-    source "${config[BASE_DIR]}/src/lib/_parser.bash"
-    source "${config[BASE_DIR]}/src/lib/_logger.bash"
+    source "${BASE_DIR}/src/lib/_parser.bash"
+    source "${BASE_DIR}/src/lib/_logger.bash"
 }
 
 main() {
+    load_config
     load_libraries
     parse_arguments "$@"
 }
