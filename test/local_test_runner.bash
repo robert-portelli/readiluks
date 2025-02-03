@@ -18,6 +18,7 @@
 #   See repository commit history (e.g., `git log`).
 
 declare -A CONFIG=(
+    [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     [IMAGENAME]="robertportelli/test-readiluks:latest"
     [DOCKERIMAGE]="ubuntu-latest=${config[IMAGENAME]}"
     [TEST]=""
@@ -41,6 +42,14 @@ parse_arguments() {
         echo "Error: --test flag is required."
         exit 1
     fi
+}
+
+run_in_docker() {
+    local cmd="$1"
+    docker run --rm \
+        -v "$(pwd):${CONFIG[BASE_DIR]}" \
+        -w "${CONFIG[BASE_DIR]}" \
+        "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
 
 test_common_setup() {
@@ -90,12 +99,6 @@ cleanup() {
     else
         echo "No containers found for image '${CONFIG[IMAGENAME]}'."
     fi
-}
-
-base() {
-    local BASE_DIR
-    BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    echo "$BASE_DIR"
 }
 
 main() {
