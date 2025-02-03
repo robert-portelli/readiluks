@@ -5,12 +5,14 @@ FROM archlinux:latest
 
 RUN pacman-key --init && \
     pacman-key --populate archlinux && \
+    pacman -Sy --noconfirm archlinux-keyring && \
     pacman -Syu --noconfirm
 
 RUN pacman -S --noconfirm \
     act \
     bats-assert bats-file bats-support \
-    nodejs npm
+    nodejs npm \
+    kcov
 
 WORKDIR /workspace
 
