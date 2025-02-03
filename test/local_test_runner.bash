@@ -15,7 +15,6 @@
 #   See repository tags or release notes.
 # License:
 #   See repository license file (e.g., LICENSE.md).
-# Last Updated:
 #   See repository commit history (e.g., `git log`).
 
 declare -A CONFIG=(
@@ -29,24 +28,12 @@ declare -A CONFIG=(
 parse_arguments() {
     while [[ "$#" -gt 0 ]]; do
         case "$1" in
-            --test)
-                shift
-                CONFIG[TEST]="$1"
-                shift
-                ;;
-            --coverage)
-                CONFIG[COVERAGE]=true
-                shift
-                ;;
-            --workflow)
-                CONFIG[WORKFLOW]=true
-                shift
-                ;;
-            *)
-                echo "Unknown option: $1"
-                exit 1
-                ;;
+            --test) shift; CONFIG[TEST]="$1" ;;
+            --coverage) CONFIG[COVERAGE]=true ;;
+            --workflow) CONFIG[WORKFLOW]=true ;;
+            *) echo "Unknown option: $1"; exit 1 ;;
         esac
+        shift
     done
 
     # Require --test flag
