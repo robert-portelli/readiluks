@@ -100,15 +100,16 @@ cleanup() {
 }
 
 main() {
-    parse_test_arguments "$@"
-    readonly -A CONFIG
+    parse_arguments "$@"
 
-    if [[ "$LOG_LEVEL" == "DEBUG" ]]; then
-        log_config
+    # Ensure CONFIG[TEST] is a valid function before executing it
+    if declare -F "${CONFIG[TEST]}" >/dev/null; then
+        trap cleanup EXIT
+        "${CONFIG[TEST]}"
+    else
+        echo "Error: '${CONFIG[TEST]}' is not a valid test function"
+        exit 1
     fi
-
-    trap cleanup EXIT
-    run_tests
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
