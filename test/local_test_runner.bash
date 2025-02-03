@@ -26,19 +26,28 @@ declare -A CONFIG=(
     [WORKFLOW]=false
 )
 
-
-cleanup() {
-    local containers
-    containers=$(docker ps -a -q --filter ancestor="${CONFIG[IMAGENAME]}")
-
-    if [[ -n "$containers" ]]; then
-        echo "Found containers for '${CONFIG[IMAGENAME]}': $containers"
-        echo "Removing containers..."
-        # shellcheck disable=SC2086
-        docker rm -f $containers || echo "Failed to remove some containers" >&2
-    else
-        echo "No containers found for image '${CONFIG[IMAGENAME]}'."
-    fi
+parse_arguments() {
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            --test)
+                shift
+                CONFIG[TEST]="$1"
+                shift
+                ;;
+            --coverage)
+                CONFIG[COVERAGE]=true
+                shift
+                ;;
+            --workflow)
+                CONFIG[WORKFLOW]=true
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
 }
 
 test_common_setup() {
@@ -74,6 +83,20 @@ run_tests() {
     unit_test_parser
     integration_test_parser
 
+}
+
+cleanup() {
+    local containers
+    containers=$(docker ps -a -q --filter ancestor="${CONFIG[IMAGENAME]}")
+
+    if [[ -n "$containers" ]]; then
+        echo "Found containers for '${CONFIG[IMAGENAME]}': $containers"
+        echo "Removing containers..."
+        # shellcheck disable=SC2086
+        docker rm -f $containers || echo "Failed to remove some containers" >&2
+    else
+        echo "No containers found for image '${CONFIG[IMAGENAME]}'."
+    fi
 }
 
 main() {
