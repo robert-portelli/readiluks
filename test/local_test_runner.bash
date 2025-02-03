@@ -52,8 +52,14 @@ run_in_docker() {
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
 
+test_bats_common_setup() {
+    local filename
+    filename="test_common_setup.bats"
+    run_in_docker "bats ${CONFIG[BASE_DIR]}/test/${filename}"
+}
+
 test_common_setup() {
-    gh act workflow_dispatch -j "test-bats-common-setup"
+    run_in_docker "act workflow_dispatch -j 'test-bats-common-setup'"
 }
 
 test_parse_prod_args_workflow() {
