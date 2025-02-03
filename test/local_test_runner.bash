@@ -19,13 +19,11 @@
 #   See repository commit history (e.g., `git log`).
 
 declare -A CONFIG=(
-    [LOG_LEVEL]="INFO"  # Default log level
-    [LOG_TO_CONSOLE]=false  # Default: don't log to console
-    [BATS_FLAGS]=""
-    [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     [IMAGENAME]="robertportelli/test-readiluks:latest"
     [DOCKERIMAGE]="ubuntu-latest=${config[IMAGENAME]}"
-    [TESTS]=""
+    [TEST]=""
+    [COVERAGE]=false
+    [WORKFLOW]=false
 )
 
 
