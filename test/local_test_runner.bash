@@ -48,6 +48,12 @@ parse_arguments() {
                 ;;
         esac
     done
+
+    # Require --test flag
+    if [[ -z "${CONFIG[TEST]}" ]]; then
+        echo "Error: --test flag is required."
+        exit 1
+    fi
 }
 
 test_common_setup() {
