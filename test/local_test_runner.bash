@@ -46,11 +46,30 @@ parse_arguments() {
 
 run_in_docker() {
     local cmd="$1"
+
+    # Check if the image exists locally
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
+        echo "Image '${CONFIG[IMAGENAME]}' not found locally. Attempting to build..."
+
+        # Try building locally first
+        if ! docker build -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile .; then
+            echo "Local build failed. Attempting to pull from Docker Hub..."
+
+            # If build fails, attempt to pull
+            if ! docker pull "${CONFIG[IMAGENAME]}"; then
+                echo "Failed to pull Docker image '${CONFIG[IMAGENAME]}'."
+                exit 1
+            fi
+        fi
+    fi
+
+    # Run the test in the container
     docker run --rm \
         -v "$(pwd):${CONFIG[BASE_DIR]}" \
         -w "${CONFIG[BASE_DIR]}" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
+
 
 test_bats_common_setup() {
     local filename
