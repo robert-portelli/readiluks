@@ -45,6 +45,16 @@ jobs:
             set -- $BATS_FLAGS  # Unpack flags
             bats "$@" test/unit/test_parser.bats
           fi
+      - name: Generate Coverage Report
+        run: |-
+          kcov --clean --include-path=src/lib/_parser.bash coverage/ bats test/unit/test_parser.bats
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          fail_ci_if_error: true
+          verbose: true
   integration-test-parser:
     runs-on: ubuntu-latest
     container:
@@ -69,3 +79,13 @@ jobs:
             set -- $BATS_FLAGS  # Unpack flags
             bats "$@" test/integration/test_parser.bats
           fi
+      - name: Generate Coverage Report
+        run: |-
+          kcov --clean --include-path=src/main.bash coverage/ bats test/integration/test_parser.bats
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          fail_ci_if_error: true
+          verbose: true
