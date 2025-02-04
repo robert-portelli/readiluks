@@ -24,6 +24,7 @@ declare -A CONFIG=(
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
+    [BATS_FLAGS]=""
 )
 
 parse_arguments() {
@@ -32,6 +33,7 @@ parse_arguments() {
             --test) shift; CONFIG[TEST]="$1" ;;
             --coverage) CONFIG[COVERAGE]=true ;;
             --workflow) CONFIG[WORKFLOW]=true ;;
+            --bats-flags) shift; CONFIG[BATS_FLAGS]="$1" ;;
             *) echo "Unknown option: $1"; exit 1 ;;
         esac
         shift
@@ -65,50 +67,83 @@ run_in_docker() {
 
     # Run the test in the container
     docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
         -v "$(pwd):${CONFIG[BASE_DIR]}" \
         -w "${CONFIG[BASE_DIR]}" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
 
+run_test() {
+    local test_name="${FUNCNAME[1]}"
+    local source_file="$1"
+    local test_file="$2"
+    local workflow_event="$3"
+    local workflow_job="$4"
+
+    echo "📢 Running test: $test_name"
+
+    # Ensure BASE_DIR is set
+    if [[ -z "${CONFIG[BASE_DIR]}" ]]; then
+        echo "❌ ERROR: CONFIG[BASE_DIR] is empty. Aborting."
+        exit 1
+    fi
+
+    # Run unit tests if neither --coverage nor --workflow were passed
+    if [[ "${CONFIG[COVERAGE]}" == "false" && "${CONFIG[WORKFLOW]}" == "false" ]]; then
+        echo "🧪 Running BATS tests: ${test_file}"
+        run_in_docker "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
+    fi
+
+    # Run kcov if --coverage was passed
+    if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
+        echo "📊 Running coverage analysis..."
+        run_in_docker "kcov_dir=\$(mktemp -d) && \
+                       echo '📂 Temporary kcov directory: \$kcov_dir' && \
+                       kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' && \
+                       echo '📝 Uncovered lines:' && \
+                       grep 'covered=\"false\"' \"\$kcov_dir/bats/sonarqube.xml\" || echo '✅ All lines covered.' && \
+                       rm -rf \"\$kcov_dir\""
+    fi
+
+    # Run workflow tests if --workflow was passed
+    if [[ "${CONFIG[WORKFLOW]}" == "true" ]]; then
+        echo "🚀 Running workflow tests for job: ${workflow_job}"
+        run_in_docker "act \
+                        '${workflow_event}' \
+                        -P ${CONFIG[DOCKERIMAGE]} \
+                        --pull=false \
+                        -j '${workflow_job}' \
+                        --input bats-flags=${CONFIG[BATS_FLAGS]}"
+    fi
+
+    echo "✅ $test_name completed."
+}
 
 test_bats_common_setup() {
-    local filename
-    filename="test_common_setup.bats"
-    run_in_docker "bats ${CONFIG[BASE_DIR]}/test/${filename}"
-}
+    local source_file="${CONFIG[BASE_DIR]}/test/lib/_common_setup.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/test_common_setup.bats"
+    local workflow_event="workflow_dispatch"
+    local workflow_job="test-bats-common-setup"
 
-test_common_setup() {
-    run_in_docker "act workflow_dispatch -j 'test-bats-common-setup'"
-}
-
-test_parse_prod_args_workflow() {
-    # emulate PR trigger
-    gh act pull_request -j  "test-parser"
-    # emulate manual trigger with default bats flags provided by workflow:
-    gh act workflow_dispatch -j "test-parser"
-    # emulate manual trigger with overriding bats flags:
-    gh act workflow_dispatch -j "test-parser" --input bats-flags="--timing"
-    # emulate manual trigger without bats flags:
-    gh act workflow_dispatch -j "test-parser" --input bats-flags=""
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
 unit_test_parser() {
-    #gh act workflow_dispatch -j "unit-test-parser"
-    #gh act workflow_dispatch -j "test-parser" --input bats-flags="none"
-    gh act workflow_dispatch -j "unit-test-parser" --input bats-flags="--verbose-run"
+    local source_file="${CONFIG[BASE_DIR]}/src/lib/_parser.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/unit/test_parser.bats"
+    local workflow_event="workflow_dispatch"
+    local workflow_job="unit-test-parser"
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
 integration_test_parser() {
-    gh act workflow_dispatch -j "integration-test-parser" --input bats-flags="--verbose-run"
-    #gh act workflow_dispatch -j "integration-test-parser" --env USE_TEST_PARSER=1
-    #gh act workflow_dispatch -j "integration-test-parser"
-}
+    local source_file="${CONFIG[BASE_DIR]}/src/main.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/integration/test_parser.bats"
+    local workflow_event="workflow_dispatch"
+    local workflow_job="integration-test-parser"
 
-run_tests() {
-    #test_common_setup
-    #test_parse_prod_args_workflow
-    unit_test_parser
-    integration_test_parser
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 
 }
 
