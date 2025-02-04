@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
+    permissions:
+      contents: read
+      actions: write  # allows saving state
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
