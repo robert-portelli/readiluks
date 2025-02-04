@@ -65,16 +65,26 @@ run_in_docker() {
         fi
     fi
 
-    # Run the test in the container
-    docker run --rm \
+     # Start the test container and capture its ID
+    CONTAINER_ID=$(docker run --rm -d \
         --security-opt=no-new-privileges \
         --cap-drop=ALL \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v "$(pwd):${CONFIG[BASE_DIR]}:ro" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash -c "$cmd"
+        "${CONFIG[IMAGENAME]}" bash -c "$cmd")
+
+    # Save container ID for cleanup
+    echo "$CONTAINER_ID" > /tmp/test_container_id
+
+    # Attach to the container so it runs in the foreground
+    docker logs -f "$CONTAINER_ID"
+
+    # Remove the container (Docker --rm flag ensures this is not needed in most cases)
+    docker stop "$CONTAINER_ID" > /dev/null 2>&1 && docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
 }
+
 run_test() {
     local test_name="${FUNCNAME[1]}"
     local source_file="$1"
@@ -150,26 +160,30 @@ integration_test_parser() {
 }
 
 cleanup() {
-    local containers
-    containers=$(docker ps -a -q --filter ancestor="${CONFIG[IMAGENAME]}")
-
-    if [[ -n "$containers" ]]; then
-        echo "Found containers for '${CONFIG[IMAGENAME]}': $containers"
-        echo "Removing containers..."
-        # shellcheck disable=SC2086
-        docker rm -f $containers || echo "Failed to remove some containers" >&2
+    if [[ -f /tmp/test_container_id ]]; then
+        CONTAINER_ID=$(cat /tmp/test_container_id)
+        if docker ps -a -q | grep -q "$CONTAINER_ID"; then
+            echo "🧹 Cleaning up test container: $CONTAINER_ID"
+            docker stop "$CONTAINER_ID" > /dev/null 2>&1 && docker rm -f "$CONTAINER_ID" > /dev/null 2>&1 || echo "⚠️ Failed to remove container."
+        fi
+        rm -f /tmp/test_container_id
     else
-        echo "No containers found for image '${CONFIG[IMAGENAME]}'."
+        echo "✅ No test container to clean up."
     fi
 }
+
 
 main() {
     parse_arguments "$@"
 
     # Ensure CONFIG[TEST] is a valid function before executing it
     if declare -F "${CONFIG[TEST]}" >/dev/null; then
-        trap cleanup EXIT
         "${CONFIG[TEST]}"
+
+        # Only set the cleanup trap if a container was started
+        if [[ -f "/tmp/test_container_id" ]]; then
+            trap cleanup EXIT
+        fi
     else
         echo "Error: '${CONFIG[TEST]}' is not a valid test function"
         exit 1
