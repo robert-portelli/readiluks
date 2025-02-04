@@ -2,11 +2,12 @@
 # It is not intended for production or deployment purposes.
 
 # Use Arch Linux as base image
-FROM archlinux:latest
+FROM archlinux:base
 
 # Initialize and update keyring before running a full system upgrade
 RUN pacman-key --init && \
     pacman-key --populate archlinux && \
+    pacman -Sy --noconfirm archlinux-keyring && \
     pacman -Syu --noconfirm
 
 # Install required packages
@@ -17,10 +18,18 @@ RUN pacman -S --noconfirm --needed \
     kcov
 
 # Add non-root user
-RUN useradd -m -s /bin/bash testuser
+RUN useradd -m -s /bin/bash testuser && \
+    passwd -l testuser  # Lock the account from password-based login
 
-# Add this before switching to testuser
-RUN mkdir -p /__w/_temp/_runner_file_commands && chown -R testuser:testuser /__w
+# Set up workspace directory
+RUN mkdir -p /workspace && \
+    chown -R testuser:testuser /workspace && \
+    chmod 755 /workspace
+
+# Prevent privilege escalation
+RUN chmod -s /usr/bin/su && \
+    chmod -s /usr/bin/passwd && \
+    rm -rf /etc/sudoers* /var/cache/pacman/pkg/*
 
 # Use testuser for security
 USER testuser
