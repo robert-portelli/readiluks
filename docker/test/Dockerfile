@@ -19,8 +19,8 @@ RUN pacman -S --noconfirm --needed \
 # Add non-root user
 RUN useradd -m -s /bin/bash testuser
 
-# Ensure testuser has permissions to write to /__w
-RUN mkdir -p /__w && chown -R testuser:testuser /__w
+# Add this before switching to testuser
+RUN mkdir -p /__w/_temp/_runner_file_commands && chown -R testuser:testuser /__w
 
 # Use testuser for security
 USER testuser
