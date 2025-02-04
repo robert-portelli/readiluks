@@ -31,6 +31,11 @@ RUN chmod -s /usr/bin/su && \
     chmod -s /usr/bin/passwd && \
     rm -rf /etc/sudoers* /var/cache/pacman/pkg/*
 
+# Ensure the non-root user has access to GitHub Actions workspace
+RUN mkdir -p /__w && \
+    chown -R testuser:testuser /__w && \
+    chmod -R 755 /__w
+
 # Use testuser for security
 USER testuser
 
