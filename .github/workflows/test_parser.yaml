@@ -28,8 +28,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - name: Run Production Argument Parser Unit BATS Tests
         env:
           BATS_FLAGS: ${{ github.event.inputs.bats-flags }}
