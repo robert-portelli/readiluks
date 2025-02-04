@@ -67,8 +67,11 @@ run_in_docker() {
 
     # Run the test in the container
     docker run --rm \
+        --security-opt=no-new-privileges \
+        --cap-drop=ALL \
+        --cap-add=NET_BIND_SERVICE \
         -v /var/run/docker.sock:/var/run/docker.sock \
-        -v "$(pwd):${CONFIG[BASE_DIR]}" \
+        -v "$(pwd):${CONFIG[BASE_DIR]}:ro" \
         -w "${CONFIG[BASE_DIR]}" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
