@@ -69,10 +69,10 @@ run_in_docker() {
     docker run --rm \
         --security-opt=no-new-privileges \
         --cap-drop=ALL \
-        --cap-add=NET_BIND_SERVICE \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v "$(pwd):${CONFIG[BASE_DIR]}:ro" \
         -w "${CONFIG[BASE_DIR]}" \
+        --user "$(id -u):$(id -g)" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
 run_test() {
