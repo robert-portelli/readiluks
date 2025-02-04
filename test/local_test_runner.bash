@@ -20,7 +20,7 @@
 declare -A CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     [IMAGENAME]="robertportelli/test-readiluks:latest"
-    [DOCKERIMAGE]="ubuntu-latest=${config[IMAGENAME]}"
+    [DOCKERIMAGE]="ubuntu-latest=${CONFIG[IMAGENAME]}"
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
@@ -72,7 +72,6 @@ run_in_docker() {
         -w "${CONFIG[BASE_DIR]}" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd"
 }
-
 run_test() {
     local test_name="${FUNCNAME[1]}"
     local source_file="$1"
