@@ -17,28 +17,6 @@ RUN pacman -S --noconfirm --needed \
     nodejs npm \
     kcov
 
-# Add non-root user
-RUN useradd -m -s /bin/bash testuser && \
-    passwd -l testuser  # Lock the account from password-based login
-
-# Set up workspace directory
-RUN mkdir -p /workspace && \
-    chown -R testuser:testuser /workspace && \
-    chmod 755 /workspace
-
-# Prevent privilege escalation
-RUN chmod -s /usr/bin/su && \
-    chmod -s /usr/bin/passwd && \
-    rm -rf /etc/sudoers* /var/cache/pacman/pkg/*
-
-# Ensure the non-root user has access to GitHub Actions workspace
-RUN mkdir -p /__w && \
-    chown -R testuser:testuser /__w && \
-    chmod -R 755 /__w
-
-# Use testuser for security
-USER testuser
-
 # Set working directory
 WORKDIR /workspace
 
