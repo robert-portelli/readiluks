@@ -1,21 +1,56 @@
 #!/usr/bin/env bash
+#!/usr/bin/env bash
 
-# Filename:
+# ==============================================================================
+# Filename: local_test_runner.bash
 # Description:
+#   This script provides a unified interface for executing tests within a
+#   Dockerized test environment. It supports running unit tests, integration
+#   tests, code coverage analysis, and GitHub Actions workflow simulations.
+#
 # Purpose:
+#   - Standardizes the execution of test cases across different environments.
+#   - Provides a containerized execution context, ensuring reproducibility.
+#   - Supports multiple test execution modes (unit, integration, workflow, coverage).
+#   - Automates the cleanup of test containers to prevent resource leaks.
+#
 # Usage:
+#   bash test/local_test_runner.bash --test <test_function> [options]
+#
 # Options:
+#   --test <test_function>   Specify the test function to execute (required).
+#   --coverage               Run code coverage analysis using kcov.
+#   --workflow               Execute tests via GitHub Actions workflow.
+#   --bats-flags "<flags>"   Pass additional flags to BATS test execution.
+#
 # Examples:
-
+#   # Run unit tests for the parser
+#   bash test/local_test_runner.bash --test unit_test_parser
+#
+#   # Run unit tests and capture code coverage
+#   bash test/local_test_runner.bash --test unit_test_parser --coverage
+#
+#   # Run integration tests via GitHub Actions workflow
+#   bash test/local_test_runner.bash --test integration_test_parser --workflow
+#
+#   # Run unit tests with custom BATS flags
+#   bash test/local_test_runner.bash --test unit_test_parser --bats-flags "--timing"
+#
 # Requirements:
+#   - Docker installed and running
+#   - The test container (robertportelli/test-readiluks:latest) available
+#
 # Author:
 #   Robert Portelli
 #   Repository: https://github.com/robert-portelli/readiluks
+#
 # Version:
 #   See repository tags or release notes.
+#
 # License:
 #   See repository license file (e.g., LICENSE.md).
 #   See repository commit history (e.g., `git log`).
+# ==============================================================================
 
 declare -A CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
