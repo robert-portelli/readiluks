@@ -26,6 +26,8 @@ jobs:
     container:
       image: robertportelli/test-readiluks:latest
     steps:
+      - name: Set permissions for temp directory
+        run: sudo chmod -R 777 /__w/_temp/
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
