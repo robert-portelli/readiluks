@@ -58,19 +58,58 @@ parse_arguments() {
                 echo "LOG_TO_CONSOLE=${config[LOG_TO_CONSOLE]}" >&2 # for integration testing
                 shift
                 ;;
+            --device-uuid)
+                shift
+                if [[ -n "$1" ]] && blkid -U "$1" >/dev/null 2>&1; then
+                    config[DEVICE_UUID]="$1"
+                    echo "DEVICE_UUID=${config[DEVICE_UUID]}" >&2  # for integration testing
+                    shift
+                else
+                    echo "ERROR: UUID not found: '$1'" >&2
+                    return 1
+                fi
+                ;;
+            --device-label)
+                shift
+                if [[ -n "$1" ]] && [[ -e "/dev/disk/by-partlabel/$1" ]]; then
+                    config[DEVICE_LABEL]="$1"
+                    echo "DEVICE_LABEL=${config[DEVICE_LABEL]}" >&2  # for integration testing
+                    shift
+                else
+                    echo "ERROR: Device label not found: '$1'" >&2
+                    return 1
+                fi
+                ;;
             --help|-h)
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]"
+                usage_message
                 return 0
                 ;;
             *)
                 echo "Unknown option: $1"
-                echo "Usage: $0 [--log-level {DEBUG|INFO|WARNING|ERROR}] [--log-to-console]" >&2
+                usage_message >&2
                 return 1
                 ;;
         esac
     done
     return 0
 }
+
+usage_message() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Options:
+  --log-level {DEBUG|INFO|WARNING|ERROR}  Set log verbosity level.
+  --log-to-console                        Enable console logging.
+  --log-format {json|human}               Set log format.
+  --device-uuid <UUID>                    Specify device UUID (e.g., "12345678-1234-5678-1234-567812345678").
+  --device-label <LABEL>                  Specify device label (e.g., "/dev/disk/by-partlabel/example-device").
+  --help, -h                              Show this help message and exit.
+
+EOF
+}
+
+
 
 log_config() {
     if [[ "$(declare -p config 2>/dev/null)" =~ "declare -A" ]]; then
