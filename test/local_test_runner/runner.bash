@@ -52,26 +52,15 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
-declare -A CONFIG=(
-    [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-    [IMAGENAME]="robertportelli/test-readiluks:latest"
-    [DOCKERIMAGE]="ubuntu-latest=${CONFIG[IMAGENAME]}"
-    [TEST]=""
-    [COVERAGE]=false
-    [WORKFLOW]=false
-    [BATS_FLAGS]=""
-    [DIND_FILE]="docker/test/Docker.dind"
-    [DIND_IMAGE]="test-readiluks-dind"
-    [DIND_CONTAINER]="test-readiluks-dind-container"
-)
-
 BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 load_libraries() {
+    source "$BASEDIR/test/local_test_runner/lib/_runner-config.bash"
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
 }
 
 
@@ -126,20 +115,6 @@ integration_test_parser() {
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 
 }
-
-cleanup() {
-    if [[ -f /tmp/test_container_id ]]; then
-        CONTAINER_ID=$(cat /tmp/test_container_id)
-        if docker ps -a -q | grep -q "$CONTAINER_ID"; then
-            echo "🧹 Cleaning up test container: $CONTAINER_ID"
-            docker stop "$CONTAINER_ID" > /dev/null 2>&1 && docker rm -f "$CONTAINER_ID" > /dev/null 2>&1 || echo "⚠️ Failed to remove container."
-        fi
-        rm -f /tmp/test_container_id
-    else
-        echo "✅ No test container to clean up."
-    fi
-}
-
 
 main() {
     load_libraries
