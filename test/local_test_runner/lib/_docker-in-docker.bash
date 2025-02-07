@@ -1,3 +1,46 @@
+# ==============================================================================
+# Filename: test/local_test_runner/lib/_docker-in-docker.bash
+# ------------------------------------------------------------------------------
+# Description:
+#   Manages the lifecycle of the Docker-in-Docker (DinD) container used for
+#   isolated test execution. Ensures that DinD is running and that the required
+#   test image is available inside it.
+#
+# Purpose:
+#   - Starts the DinD container (`docker:dind` with custom setup) if it is not already running.
+#   - Ensures the test image (`robertportelli/test-readiluks:latest`) is available inside DinD.
+#   - Provides an isolated Docker environment for executing tests.
+#   - Uses the Dockerfile at `docker/test/Dockerfile.dind` to build the DinD image.
+#
+# Options:
+#   This script does not accept command-line options. It is sourced by the test
+#   runner and its functions.
+#
+# Usage:
+#   source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
+#   start_dind
+#
+# Example(s):
+#   # Ensure DinD is running and the test image is available
+#   start_dind
+#
+# Requirements:
+#   - Must be sourced before calling `start_dind()`.
+#   - Requires Docker to be installed and running on the host.
+#   - Assumes the DinD container is used for executing nested test containers.
+#
+# Author:
+#   Robert Portelli
+#   Repository: https://github.com/robert-portelli/readiluks
+#
+# Version:
+#   See repository tags or release notes.
+#
+# License:
+#   See repository license file (e.g., LICENSE.md).
+#   See repository commit history (e.g., `git log`).
+# ==============================================================================
+
 start_dind() {
     echo "🚀 Ensuring Docker-in-Docker container is running..."
 

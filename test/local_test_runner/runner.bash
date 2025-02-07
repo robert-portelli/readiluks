@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-#!/usr/bin/env bash
 
 # ==============================================================================
-# Filename: local_test_runner.bash
+# Filename: test/local_test_runner/runner.bash
+# ------------------------------------------------------------------------------
 # Description:
-#   This script provides a unified interface for executing tests within a
-#   Dockerized test environment. It supports running unit tests, integration
-#   tests, code coverage analysis, and GitHub Actions workflow simulations.
+#   Provides a unified interface for executing tests within a Dockerized
+#   test environment. Supports running unit tests, integration tests,
+#   coverage analysis, and workflow simulations using DinD (Docker-in-Docker).
 #
 # Purpose:
 #   - Standardizes the execution of test cases across different environments.
 #   - Provides a containerized execution context, ensuring reproducibility.
 #   - Supports multiple test execution modes (unit, integration, workflow, coverage).
-#   - Automates the cleanup of test containers to prevent resource leaks.
+#   - Manages Docker-in-Docker (DinD) setup for isolated testing.
+#   - Automates cleanup of test containers to prevent resource leaks.
 #
 # Usage:
-#   bash test/local_test_runner.bash --test <test_function> [options]
+#   bash test/local_test_runner/runner.bash --test <test_function> [options]
 #
 # Options:
 #   --test <test_function>   Specify the test function to execute (required).
@@ -25,20 +26,26 @@
 #
 # Examples:
 #   # Run unit tests for the parser
-#   bash test/local_test_runner.bash --test unit_test_parser
+#   bash test/local_test_runner/runner.bash --test unit_test_parser
 #
 #   # Run unit tests and capture code coverage
-#   bash test/local_test_runner.bash --test unit_test_parser --coverage
+#   bash test/local_test_runner/runner.bash --test unit_test_parser --coverage
 #
 #   # Run integration tests via GitHub Actions workflow
-#   bash test/local_test_runner.bash --test integration_test_parser --workflow
+#   bash test/local_test_runner/runner.bash --test integration_test_parser --workflow
 #
 #   # Run unit tests with custom BATS flags
-#   bash test/local_test_runner.bash --test unit_test_parser --bats-flags "--timing"
+#   bash test/local_test_runner/runner.bash --test unit_test_parser --bats-flags "--timing"
 #
 # Requirements:
-#   - Docker installed and running
-#   - The test container (robertportelli/test-readiluks:latest) available
+#   - Docker installed and running.
+#   - The following Docker images must be available:
+#       - `robertportelli/test-readiluks:latest`: Test container based on Arch Linux.
+#       - `docker:dind`: Docker-in-Docker (DinD) container used for isolated testing.
+#   - The following Dockerfiles are packaged with the repository:
+#       - `docker/test/Dockerfile`: Defines the test environment and is pushed to Docker Hub.
+#       - `docker/test/Dockerfile.dind`: Defines the DinD environment used for nested containers.
+#   - The DinD container must be running for isolated test execution.
 #
 # Author:
 #   Robert Portelli
@@ -51,6 +58,7 @@
 #   See repository license file (e.g., LICENSE.md).
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
+
 
 BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
@@ -118,14 +126,12 @@ main() {
     load_libraries
     parse_arguments "$@"
 
+    # Set cleanup trap immediately, ensuring cleanup happens even if something fails
+    trap cleanup EXIT
+
     # Ensure CONFIG[TEST] is a valid function before executing it
     if declare -F "${CONFIG[TEST]}" >/dev/null; then
         "${CONFIG[TEST]}"
-
-        # Only set the cleanup trap if a container was started
-        if [[ -f "/tmp/test_container_id" ]]; then
-            trap cleanup EXIT
-        fi
     else
         echo "Error: '${CONFIG[TEST]}' is not a valid test function"
         exit 1
