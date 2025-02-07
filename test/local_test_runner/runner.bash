@@ -63,8 +63,6 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
 }
 
-
-
 file_check() {
     local source_file="$1"
     local test_file="$2"
@@ -83,8 +81,8 @@ test_create_device() {
 }
 
 test_bats_common_setup() {
-    local source_file="${CONFIG[BASE_DIR]}/lib/_common_setup.bash"
-    local test_file="${CONFIG[BASE_DIR]}/unit/test_common_setup.bats"
+    local source_file="${CONFIG[BASE_DIR]}/test/lib/_common_setup.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/unit/test_common_setup.bats"
     local workflow_event="workflow_dispatch"
     local workflow_job="test-bats-common-setup"
 
