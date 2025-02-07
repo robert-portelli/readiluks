@@ -25,7 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
-      options: --user root
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -50,7 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
-      options: --user root
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4

@@ -18,17 +18,6 @@ RUN pacman -S --noconfirm --needed \
     kcov \
     git
 
-# Add non-root user
-RUN useradd -m -s /bin/bash testuser && \
-    passwd -l testuser  # Lock the account from password-based login
-
-# Ensure testuser owns /__w and /workspace
-RUN mkdir -p /__w /workspace && \
-    chown -R testuser:testuser /__w /workspace
-
-# Use testuser for security
-USER testuser
-
 # Set working directory
 WORKDIR /workspace
 
