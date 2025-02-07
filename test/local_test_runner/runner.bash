@@ -65,24 +65,12 @@ declare -A CONFIG=(
     [DIND_CONTAINER]="test-readiluks-dind-container"
 )
 
-parse_arguments() {
-    while [[ "$#" -gt 0 ]]; do
-        case "$1" in
-            --test) shift; CONFIG[TEST]="$1" ;;
-            --coverage) CONFIG[COVERAGE]=true ;;
-            --workflow) CONFIG[WORKFLOW]=true ;;
-            --bats-flags) shift; CONFIG[BATS_FLAGS]="$1" ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
-        esac
-        shift
-    done
+BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-    # Require --test flag
-    if [[ -z "${CONFIG[TEST]}" ]]; then
-        echo "Error: --test flag is required."
-        exit 1
-    fi
+load_libraries() {
+    source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
 }
+
 
 start_dind() {
     echo "🚀 Ensuring Docker-in-Docker container is running..."
@@ -291,6 +279,7 @@ cleanup() {
 
 
 main() {
+    load_libraries
     parse_arguments "$@"
 
     # Ensure CONFIG[TEST] is a valid function before executing it
