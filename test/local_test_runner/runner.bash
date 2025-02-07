@@ -70,12 +70,12 @@ BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
-    #source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
     #source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
 }
 
 
-run_in_docker() {
+xrun_in_docker() {
     local cmd="$1"
 
     # Ensure DinD is running
