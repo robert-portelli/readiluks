@@ -71,91 +71,10 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
-    #source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
 }
 
 
-xrun_in_docker() {
-    local cmd="$1"
-
-    # Ensure DinD is running
-    start_dind
-
-    # Sanity check: Ensure the test-readiluks image exists inside DinD
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
-        exit 1
-    fi
-     # Run the test container inside DinD and correctly capture its ID
-    CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
-        --security-opt=no-new-privileges \
-        --cap-drop=ALL \
-        -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        -w "${CONFIG[BASE_DIR]}" \
-        --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash -c "$cmd")
-
-    # Ensure CONTAINER_ID is not empty
-    if [[ -z "$CONTAINER_ID" ]]; then
-        echo "❌ Failed to start test container inside DinD. Aborting."
-        exit 1
-    fi
-
-    # Attach to the container logs
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
-
-    # Ensure the test container is properly cleaned up after execution
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
-}
-
-
-run_test() {
-    local test_name="${FUNCNAME[1]}"
-    local source_file="$1"
-    local test_file="$2"
-    local workflow_event="$3"
-    local workflow_job="$4"
-
-    echo "📢 Running test: $test_name"
-
-    # Ensure BASE_DIR is set
-    if [[ -z "${CONFIG[BASE_DIR]}" ]]; then
-        echo "❌ ERROR: CONFIG[BASE_DIR] is empty. Aborting."
-        exit 1
-    fi
-
-    # Run unit tests if neither --coverage nor --workflow were passed
-    if [[ "${CONFIG[COVERAGE]}" == "false" && "${CONFIG[WORKFLOW]}" == "false" ]]; then
-        echo "🧪 Running BATS tests: ${test_file}"
-        run_in_docker "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
-    fi
-
-    # Run kcov if --coverage was passed
-    if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
-        echo "📊 Running coverage analysis..."
-        run_in_docker "kcov_dir=\$(mktemp -d) && \
-                       echo '📂 Temporary kcov directory: \$kcov_dir' && \
-                       kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' && \
-                       echo '📝 Uncovered lines:' && \
-                       grep 'covered=\"false\"' \"\$kcov_dir/bats/sonarqube.xml\" || echo '✅ All lines covered.' && \
-                       rm -rf \"\$kcov_dir\""
-    fi
-
-    # Run workflow tests if --workflow was passed
-    if [[ "${CONFIG[WORKFLOW]}" == "true" ]]; then
-        echo "🚀 Running workflow tests for job: ${workflow_job}"
-        run_in_docker "act \
-                        '${workflow_event}' \
-                        -P ${CONFIG[DOCKERIMAGE]} \
-                        --pull=false \
-                        -j '${workflow_job}' \
-                        --input bats-flags=${CONFIG[BATS_FLAGS]}"
-    fi
-
-    echo "✅ $test_name completed."
-}
 
 file_check() {
     local source_file="$1"
