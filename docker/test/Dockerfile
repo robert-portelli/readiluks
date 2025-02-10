@@ -16,7 +16,9 @@ RUN pacman -S --noconfirm --needed \
     bats-assert bats-file bats-support \
     nodejs npm \
     kcov \
-    git
+    git \
+    lvm2 \
+    btrfs-progs
 
 # Set working directory
 WORKDIR /workspace
