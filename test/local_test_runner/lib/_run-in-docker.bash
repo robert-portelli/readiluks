@@ -55,8 +55,7 @@ run_in_docker() {
     fi
      # Run the test container inside DinD and correctly capture its ID
     CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
-        --security-opt=no-new-privileges \
-        --cap-drop=ALL \
+        --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -w "${CONFIG[BASE_DIR]}" \
