@@ -3,16 +3,17 @@
 
 declare -gA DEVCONFIG=(
     [IMG_SIZE]="1024M"
-    [IMG_FILE]="" # set by create_device(): /tmp/device-XXXXXX.img
-    [TEST_DEVICE]="" # set by create_device(): /dev/loopX
+    [IMG_FILE]=""  # set by create_device(): /tmp/device-XXXXXX.img
+    [TEST_DEVICE]=""  # set by create_device(): /dev/loopX
     [LUKS_PW]="password"
     [LUKS_LABEL]="TEST_LUKS"
-    [MAPPED_DEVICE]="" # set by setup_luks(): /dev/mapper/LUKS_LABEL
+    [MAPPED_DEVICE]=""  # set by setup_luks(): /dev/mapper/LUKS_LABEL
     [VG_NAME]="vgtest"
     [LV_NAME]="lvtest"
-    [MAPPED_LVM]="" # set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
+    [MAPPED_LVM]=""  # set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
     [FS_TYPE]="btrfs"
     [MOUNT_POINT]="/mnt/target"
+    [REG_FILE]="$(mktemp /tmp/device_fixture_registry-XXXXXX.log)"
 )
 
 create_device() {
@@ -26,16 +27,20 @@ create_device() {
     losetup_output=$(losetup --show -f -P "${DEVCONFIG[IMG_FILE]}" 2>/dev/null)
     if [[ -z "$losetup_output" ]]; then
         rm -f "${DEVCONFIG[IMG_FILE]}"
-        echo "Failed to create loop device for ${DEVCONFIG[IMG_FILE]}"
+        echo "Failed to create loop device for ${DEVCONFIG[IMG_FILE]}" >&2
         return 1
     fi
     DEVCONFIG[TEST_DEVICE]="$losetup_output"
 
-    echo "Created loop device: ${DEVCONFIG[TEST_DEVICE]} (backed by ${DEVCONFIG[IMG_FILE]})"
+    # Append to the registry file
+    echo "LOOPBACK ${DEVCONFIG[TEST_DEVICE]}" >> "${DEVCONFIG[REG_FILE]}"
+    echo "IMAGE ${DEVCONFIG[IMG_FILE]}" >> "${DEVCONFIG[REG_FILE]}"
+
+    echo "Created loop device: ${DEVCONFIG[TEST_DEVICE]} (backed by ${DEVCONFIG[IMG_FILE]})" >&2
 }
 
 setup_luks() {
-    echo "Setting up LUKS container on ${DEVCONFIG[TEST_DEVICE]}..."
+    echo "Setting up LUKS container on ${DEVCONFIG[TEST_DEVICE]}..." >&2
 
     echo -n "${DEVCONFIG[LUKS_PW]}" | \
         cryptsetup luksFormat \
@@ -49,114 +54,108 @@ setup_luks() {
 
     DEVCONFIG[MAPPED_DEVICE]="/dev/mapper/${DEVCONFIG[LUKS_LABEL]}"
 
-    echo "LUKS container created and opened at ${DEVCONFIG[MAPPED_DEVICE]}"
+    echo "LUKS ${DEVCONFIG[MAPPED_DEVICE]}" >> "${DEVCONFIG[REG_FILE]}"
+    echo "LUKS container created and opened at ${DEVCONFIG[MAPPED_DEVICE]}" >&2
 }
 
 setup_lvm() {
-    echo "Setting up LVM on ${DEVCONFIG[MAPPED_DEVICE]}..."
-
-    # Create physical volume (PV)
-    pvcreate "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create PV"; return 1; }
-
-    # Create volume group (VG)
-    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create VG"; return 1; }
-
-    # Create logical volume (LV)
-    lvcreate -l 100%FREE \
-        -n "${DEVCONFIG[LV_NAME]}" \
-        "${DEVCONFIG[VG_NAME]}" \
-        --zero n || { echo "Failed to create LV"; return 1; }
+    pvcreate "${DEVCONFIG[MAPPED_DEVICE]}"
+    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}"
+    lvcreate -l 100%FREE -n "${DEVCONFIG[LV_NAME]}" "${DEVCONFIG[VG_NAME]}" --zero n
 
     DEVCONFIG[MAPPED_LVM]="/dev/mapper/${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}"
 
-    # Ensure volume group is active
-    vgchange -ay "${DEVCONFIG[VG_NAME]}" || { echo "Failed to activate VG"; return 1; }
+    vgchange -ay "${DEVCONFIG[VG_NAME]}"
+    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}"
 
-    # Explicitly activate the logical volume
-    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}" || { echo "Failed to activate LV"; return 1; }
+    {
+        echo "LVM_PV ${DEVCONFIG[MAPPED_DEVICE]}"
+        echo "LVM_VG ${DEVCONFIG[VG_NAME]}"
+        echo "LVM_LV ${DEVCONFIG[MAPPED_LVM]}"
+    } >> "${DEVCONFIG[REG_FILE]}"
 
-    # Trigger udev to create device nodes
-    udevadm trigger
-    udevadm settle
-
-    # Verify LV exists
-    if [[ ! -e "${DEVCONFIG[MAPPED_LVM]}" ]]; then
-        echo "Logical volume not found in /dev/mapper/, attempting to manually create device node..."
-
-        # Get dynamic major/minor numbers
-        dm_info=$(dmsetup info "${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}" | awk '/Major, minor:/ {print $3, $4}' | tr -d ',')
-        if [[ -z "$dm_info" ]]; then
-            echo "Failed to retrieve major/minor numbers for ${DEVCONFIG[MAPPED_LVM]}"
-            return 1
-        fi
-        read -r major minor <<< "$dm_info"
-
-        # Manually create the device node
-        mknod "${DEVCONFIG[MAPPED_LVM]}" b "$major" "$minor"
-    fi
-
-    echo "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}"
-}
-
-check_fs_tools() {
-    local fs_tool
-    case "${DEVCONFIG[FS_TYPE]}" in
-        btrfs) fs_tool="btrfs-progs" ;;
-        xfs) fs_tool="xfsprogs" ;;
-        ext4) fs_tool="e2fsprogs" ;;
-        *) echo "Unsupported filesystem: ${DEVCONFIG[FS_TYPE]}"; return 1 ;;
-    esac
-
-    if ! command -v mkfs."${DEVCONFIG[FS_TYPE]}" &>/dev/null; then
-        echo "Missing required package: $fs_tool. Please install it inside the container."
-        return 1
-    fi
+    echo "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}" >&2
 }
 
 format_filesystem() {
     if [[ -z "${DEVCONFIG[MAPPED_LVM]}" ]]; then
-        echo "Error: No LVM volume found. Cannot format filesystem."
+        echo "Error: No LVM volume found. Cannot format filesystem." >&2
         return 1
     fi
 
-    echo "Formatting ${DEVCONFIG[MAPPED_LVM]} as ${DEVCONFIG[FS_TYPE]}..."
+    echo "Formatting ${DEVCONFIG[MAPPED_LVM]} as ${DEVCONFIG[FS_TYPE]}..." >&2
     mkfs."${DEVCONFIG[FS_TYPE]}" -f "${DEVCONFIG[MAPPED_LVM]}" || return 1
 
     mkdir -p "${DEVCONFIG[MOUNT_POINT]}"
 
-    echo "Mounting ${DEVCONFIG[MAPPED_LVM]} to ${DEVCONFIG[MOUNT_POINT]}..."
     mount -t "${DEVCONFIG[FS_TYPE]}" "${DEVCONFIG[MAPPED_LVM]}" "${DEVCONFIG[MOUNT_POINT]}" || return 1
+
+    echo "MOUNT ${DEVCONFIG[MOUNT_POINT]}" >> "${DEVCONFIG[REG_FILE]}"
 }
 
 teardown_device() {
-    # Unmount if mounted
-    if findmnt -rn "${DEVCONFIG[MOUNT_POINT]}" &>/dev/null; then
-        umount "${DEVCONFIG[MOUNT_POINT]}"
+    if [[ ! -f "${DEVCONFIG[REG_FILE]}" ]]; then
+        return 0
     fi
 
-    # Deactivate LVM
-    if vgs "${DEVCONFIG[VG_NAME]}" &>/dev/null; then
-        if lvs "${DEVCONFIG[MAPPED_LVM]}" &>/dev/null; then
-            lvchange -an "${DEVCONFIG[MAPPED_LVM]}"
+    echo "Starting explicit teardown of device fixture..." >&2
+
+    # Declare an associative array to store registered resources
+    declare -A REGFILE
+
+    # Populate REGFILE from the registry file
+    while read -r type value; do
+        REGFILE[$type]+="$value "  # Append values for multi-entry keys
+    done < "${DEVCONFIG[REG_FILE]}"
+
+    # Define teardown order
+    local teardown_order=("MOUNT" "LVM_LV" "LVM_VG" "LVM_PV" "LUKS" "LOOPBACK" "IMAGE")
+
+    # Iterate through the teardown order
+    for type in "${teardown_order[@]}"; do
+        if [[ -n "${REGFILE[$type]}" ]]; then
+            # Example: REGFILE[LOOPBACK]="/dev/loop0 /dev/loop1"
+            # This means we must iterate over multiple values for each key.
+            for value in ${REGFILE[$type]}; do
+                case "$type" in
+                    MOUNT)
+                        echo "Unmounting $value..." >&2
+                        umount "$value" || echo "Failed to unmount $value" >&2
+                        ;;
+                    LVM_LV)
+                        echo "Deactivating logical volume $value..." >&2
+                        lvchange -an "$value" || echo "Failed to deactivate LV" >&2
+                        lvremove -f "$value" || echo "Failed to remove LV" >&2
+                        ;;
+                    LVM_VG)
+                        echo "Deactivating volume group $value..." >&2
+                        vgchange -an "$value" || echo "Failed to deactivate VG" >&2
+                        vgremove -f "$value" || echo "Failed to remove VG" >&2
+                        ;;
+                    LVM_PV)
+                        echo "Removing physical volume $value..." >&2
+                        pvremove -f "$value" || echo "Failed to remove PV" >&2
+                        ;;
+                    LUKS)
+                        echo "Closing LUKS container $value..." >&2
+                        cryptsetup close "$value" || echo "Failed to close LUKS container" >&2
+                        ;;
+                    LOOPBACK)
+                        echo "Removing loop device $value..." >&2
+                        losetup -d "$value" || echo "Failed to remove loop device" >&2
+                        ;;
+                    IMAGE)
+                        echo "Deleting image file $value..." >&2
+                        rm -f "$value" || echo "Failed to delete image file" >&2
+                        ;;
+                esac
+            done
         fi
-        vgchange -an "${DEVCONFIG[VG_NAME]}"
-    fi
+    done
 
-    # Close LUKS
-    if [[ -n "${DEVCONFIG[MAPPED_DEVICE]}" ]]; then
-        cryptsetup close "${DEVCONFIG[LUKS_LABEL]}" 2>/dev/null
-        DEVCONFIG[MAPPED_DEVICE]=""
-    fi
-
-    # Remove loop device and image
-    if [[ -n "${DEVCONFIG[TEST_DEVICE]}" && -n "${DEVCONFIG[IMG_FILE]}" ]]; then
-        losetup -d "${DEVCONFIG[TEST_DEVICE]}" 2>/dev/null
-        rm -f "${DEVCONFIG[IMG_FILE]}"
-        # Reset all device-related variables manually
-        DEVCONFIG[MAPPED_LVM]=""
-        DEVCONFIG[MAPPED_DEVICE]=""
-        DEVCONFIG[TEST_DEVICE]=""
-        DEVCONFIG[IMG_FILE]=""
-        echo "Cleaned up loop device and image file."
-    fi
+    # Remove registry file after successful cleanup
+    rm -f "${DEVCONFIG[REG_FILE]}"
+    echo "Teardown complete." >&2
 }
+# Ensure teardown_device() runs when the script exits or gets interrupted
+trap teardown_device EXIT INT TERM
