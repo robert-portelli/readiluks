@@ -84,8 +84,24 @@ file_check() {
     }
 }
 
-test_create_device() {
-    docker run --rm -it --privileged --user root "${CONFIG[IMAGENAME]}" bash
+# bash test/local_test_runner/runner.bash --test manual_nested_container
+manual_nested_container() {
+    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
+        --privileged --user root \
+        -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
+        -w "/workspace" \
+        "${CONFIG[IMAGENAME]}" bash
+}
+
+test_device_fixture() {
+    local source_file="${CONFIG[BASE_DIR]}/test/local_test_runner/lib/_device_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
 test_bats_common_setup() {
