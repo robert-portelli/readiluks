@@ -93,9 +93,9 @@ manual_nested_container() {
         "${CONFIG[IMAGENAME]}" bash
 }
 
-test_device_fixture() {
+test_device_fixture_create_device() {
     local source_file="${CONFIG[BASE_DIR]}/test/local_test_runner/lib/_device_fixture.bash"
-    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture.bats"
+    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture/test_create_device.bats"
     local workflow_event=""
     local workflow_job=""
 

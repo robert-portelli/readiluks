@@ -77,6 +77,8 @@ repos:
         types: [shell]
         require_serial: true  # shellcheck can detect sourcing this way
         args: [-f, gcc, -x]  # output filename:linenum:colnum (clickable)
+        exclude: |
+          ^test/local_test_runner/unit/.*\.bats$
         # ============ Python ============================
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.1
