@@ -93,6 +93,17 @@ manual_nested_container() {
         "${CONFIG[IMAGENAME]}" bash
 }
 
+test_device_fixture_setup_luks() {
+    local source_file="${CONFIG[BASE_DIR]}/test/local_test_runner/lib/_device_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture/test_setup_luks.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+
 test_device_fixture_create_device() {
     local source_file="${CONFIG[BASE_DIR]}/test/local_test_runner/lib/_device_fixture.bash"
     local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture/test_create_device.bats"
