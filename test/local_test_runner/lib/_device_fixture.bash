@@ -157,5 +157,12 @@ teardown_device() {
     rm -f "${DEVCONFIG[REG_FILE]}"
     echo "Teardown complete." >&2
 }
+
+print_devconfig() {
+    for key in "${!DEVCONFIG[@]}"; do
+        echo "$key=${DEVCONFIG[$key]}"
+    done
+}
+
 # Ensure teardown_device() runs when the script exits or gets interrupted
 trap teardown_device EXIT INT TERM
