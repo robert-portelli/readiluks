@@ -171,6 +171,7 @@ teardown_device() {
                         ;;
                     LUKS)
                         echo "Closing LUKS container $value..." >&2
+                        sync && sleep 1  # allow lvm deactivate
                         cryptsetup close "$value" || {
                             echo "LUKS container is still in use, retrying in 2s..." >&2
                             sleep 2
