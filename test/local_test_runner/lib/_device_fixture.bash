@@ -59,22 +59,56 @@ setup_luks() {
 }
 
 setup_lvm() {
-    pvcreate "${DEVCONFIG[MAPPED_DEVICE]}"
-    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}"
-    lvcreate -l 100%FREE -n "${DEVCONFIG[LV_NAME]}" "${DEVCONFIG[VG_NAME]}" --zero n
+    echo "Setting up LVM on ${DEVCONFIG[MAPPED_DEVICE]}..."
+
+    # Create physical volume (PV)
+    pvcreate "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create PV"; return 1; }
+
+    # Create volume group (VG)
+    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create VG"; return 1; }
+
+    # Create logical volume (LV)
+    lvcreate -l 100%FREE \
+        -n "${DEVCONFIG[LV_NAME]}" \
+        "${DEVCONFIG[VG_NAME]}" \
+        --zero n || { echo "Failed to create LV"; return 1; }
 
     DEVCONFIG[MAPPED_LVM]="/dev/mapper/${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}"
 
-    vgchange -ay "${DEVCONFIG[VG_NAME]}"
-    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}"
+    # Ensure volume group is active
+    vgchange -ay "${DEVCONFIG[VG_NAME]}" || { echo "Failed to activate VG"; return 1; }
 
+    # Explicitly activate the logical volume
+    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}" || { echo "Failed to activate LV"; return 1; }
+
+    # Trigger udev to create device nodes
+    udevadm trigger
+    udevadm settle
+
+    # Verify LV exists
+    if [[ ! -e "${DEVCONFIG[MAPPED_LVM]}" ]]; then
+        echo "Logical volume not found in /dev/mapper/, attempting to manually create device node..."
+
+        # Get dynamic major/minor numbers
+        dm_info=$(dmsetup info "${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}" | awk '/Major, minor:/ {print $3, $4}' | tr -d ',')
+        if [[ -z "$dm_info" ]]; then
+            echo "Failed to retrieve major/minor numbers for ${DEVCONFIG[MAPPED_LVM]}"
+            return 1
+        fi
+        read -r major minor <<< "$dm_info"
+
+        # Manually create the device node
+        mknod "${DEVCONFIG[MAPPED_LVM]}" b "$major" "$minor"
+    fi
+
+    # Append LVM information to the registry file
     {
         echo "LVM_PV ${DEVCONFIG[MAPPED_DEVICE]}"
         echo "LVM_VG ${DEVCONFIG[VG_NAME]}"
         echo "LVM_LV ${DEVCONFIG[MAPPED_LVM]}"
     } >> "${DEVCONFIG[REG_FILE]}"
 
-    echo "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}" >&2
+    echo "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}"
 }
 
 format_filesystem() {
@@ -108,19 +142,18 @@ teardown_device() {
         REGFILE[$type]+="$value "  # Append values for multi-entry keys
     done < "${DEVCONFIG[REG_FILE]}"
 
-    # Define teardown order
+    # Define teardown order (adjusted for proper dependencies)
     local teardown_order=("MOUNT" "LVM_LV" "LVM_VG" "LVM_PV" "LUKS" "LOOPBACK" "IMAGE")
 
     # Iterate through the teardown order
     for type in "${teardown_order[@]}"; do
         if [[ -n "${REGFILE[$type]}" ]]; then
-            # Example: REGFILE[LOOPBACK]="/dev/loop0 /dev/loop1"
-            # This means we must iterate over multiple values for each key.
             for value in ${REGFILE[$type]}; do
                 case "$type" in
                     MOUNT)
                         echo "Unmounting $value..." >&2
                         umount "$value" || echo "Failed to unmount $value" >&2
+                        sync && sleep 1  # Allow time for unmount to complete
                         ;;
                     LVM_LV)
                         echo "Deactivating logical volume $value..." >&2
@@ -138,7 +171,11 @@ teardown_device() {
                         ;;
                     LUKS)
                         echo "Closing LUKS container $value..." >&2
-                        cryptsetup close "$value" || echo "Failed to close LUKS container" >&2
+                        cryptsetup close "$value" || {
+                            echo "LUKS container is still in use, retrying in 2s..." >&2
+                            sleep 2
+                            cryptsetup close "$value" || echo "Failed to close LUKS container" >&2
+                        }
                         ;;
                     LOOPBACK)
                         echo "Removing loop device $value..." >&2
@@ -165,4 +202,4 @@ print_devconfig() {
 }
 
 # Ensure teardown_device() runs when the script exits or gets interrupted
-trap teardown_device EXIT INT TERM
+#trap teardown_device EXIT INT TERM
