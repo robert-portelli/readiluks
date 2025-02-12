@@ -1,0 +1,10 @@
+FROM docker:dind
+
+# Install additional dependencies if needed
+RUN apk add --no-cache bash
+
+# Set up workspace
+RUN mkdir -p /workspace
+
+# Default entrypoint
+ENTRYPOINT ["dockerd-entrypoint.sh"]

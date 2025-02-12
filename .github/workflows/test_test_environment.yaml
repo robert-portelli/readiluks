@@ -18,4 +18,4 @@ jobs:
       - name: Check out Code
         uses: actions/checkout@v4
       - name: Run BATS Tests
-        run: bats test/test_common_setup.bats
+        run: bats test/unit/test_common_setup.bats

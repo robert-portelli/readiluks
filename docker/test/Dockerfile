@@ -16,18 +16,9 @@ RUN pacman -S --noconfirm --needed \
     bats-assert bats-file bats-support \
     nodejs npm \
     kcov \
-    git
-
-# Add non-root user
-RUN useradd -m -s /bin/bash testuser && \
-    passwd -l testuser  # Lock the account from password-based login
-
-# Ensure testuser owns /__w and /workspace
-RUN mkdir -p /__w /workspace && \
-    chown -R testuser:testuser /__w /workspace
-
-# Use testuser for security
-USER testuser
+    git \
+    lvm2 \
+    btrfs-progs
 
 # Set working directory
 WORKDIR /workspace

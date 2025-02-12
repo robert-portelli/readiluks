@@ -25,7 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
-      options: --user root
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -46,15 +45,10 @@ jobs:
             set -- $BATS_FLAGS  # Unpack flags
             bats "$@" test/unit/test_parser.bats
           fi
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
   integration-test-parser:
     runs-on: ubuntu-latest
     container:
       image: robertportelli/test-readiluks:latest
-      options: --user root
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -75,7 +69,3 @@ jobs:
             set -- $BATS_FLAGS  # Unpack flags
             bats "$@" test/integration/test_parser.bats
           fi
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
