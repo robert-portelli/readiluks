@@ -26,18 +26,18 @@ Ensure the following dependencies are installed:
 ---
 
 ### 🏠 Installation
-#### Clone the repository:
+#### Clone the repository
 ```bash
 git clone https://github.com/robert-portelli/readiluks.git
 cd readiluks
 ```
 
-#### Build the test container:
+#### Build the test container
 ```bash
 docker buildx build --load -t robertportelli/test-readiluks:latest -f docker/test/Dockerfile .
 ```
 
-#### (Optional) Build the DinD container:
+#### (Optional) Build the DinD container
 ```bash
 docker buildx build --load -t test-readiluks-dind -f docker/test/Dockerfile.dind .
 ```
@@ -45,29 +45,29 @@ docker buildx build --load -t test-readiluks-dind -f docker/test/Dockerfile.dind
 ## 🧪 Running Tests
 All tests are executed inside a Docker-in-Docker environment for isolation.
 
-### 💮 Run a Unit Test:
+### 💮 Run a Unit Test
 ```bash
 bash test/local_test_runner/runner.bash --test test_device_fixture/test_create_device
 ```
 
-### 💮 Run All `test_device_fixture/` Tests:
+### 💮 Run All `test_device_fixture/` Tests
 ```bash
 for test in test/local_test_runner/unit/test_device_fixture/*.bats; do
     bash test/local_test_runner/runner.bash --test "$test"
 done
 ```
 
-### 💮 Run an Integration Test:
+### 💮 Run an Integration Test
 ```bash
 bash test/local_test_runner/runner.bash --test integration_test_parser
 ```
 
-### 💮 Run a Test with Code Coverage:
+### 💮 Run a Test with Code Coverage
 ```bash
 bash test/local_test_runner/runner.bash --test test_device_fixture/test_setup_luks --coverage
 ```
 
-### 💮 Run a Workflow Test (GitHub Actions Simulation):
+### 💮 Run a Workflow Test (GitHub Actions Simulation)
 ```bash
 bash test/local_test_runner/runner.bash --test test_device_fixture/test_teardown_device --workflow
 ```
