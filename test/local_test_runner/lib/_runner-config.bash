@@ -57,7 +57,7 @@ declare -gA CONFIG=(
     [COVERAGE]=false
     [WORKFLOW]=false
     [BATS_FLAGS]=""
-    [DIND_FILE]="docker/test/Docker.dind"
+    [DIND_FILE]="docker/test/Dockerfile.dind"
     [DIND_IMAGE]="test-readiluks-dind"
     [DIND_CONTAINER]="test-readiluks-dind-container"
 )

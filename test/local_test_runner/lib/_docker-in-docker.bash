@@ -53,8 +53,7 @@ start_dind() {
     # Start DinD container if not already running
     if ! docker ps --format "{{.Names}}" | grep -q "${CONFIG[DIND_CONTAINER]}"; then
         docker run --rm -d \
-            --security-opt=no-new-privileges \
-            --cap-drop=ALL \
+            --privileged \
             -v "$(pwd):${CONFIG[BASE_DIR]}:ro" \
             --name "${CONFIG[DIND_CONTAINER]}" \
             "${CONFIG[DIND_IMAGE]}"
