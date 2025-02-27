@@ -13,29 +13,27 @@
 #   - Provides a containerized execution context, ensuring reproducibility.
 #   - Supports multiple test execution modes (unit, integration, workflow, coverage).
 #   - Manages Docker-in-Docker (DinD) setup for isolated testing.
-#   - Automates cleanup of test containers to prevent resource leaks.
+#   - Automates cleanup of test containers and loopback devices to prevent resource leaks.
+#   - Introduces `test_dind_container` and `test_container` functions for
+#     dynamic test execution inside nested and direct Docker containers.
+#
+# Functions:
+#   - `test_dind_container`: Executes tests within a nested Docker container
+#     inside the DinD environment, ensuring isolation.
+#   - `test_container`: Runs a standard test container directly in the DinD environment.
+#   - `manual_nested_container`: Allows manual execution of a nested container for debugging.
+#   - `cleanup_test_device`: Ensures proper cleanup of the loopback device and image file.
+#   - `nested_container_cleanup`: Handles the removal of any orphaned containers.
 #
 # Usage:
 #   bash test/local_test_runner/runner.bash --test <test_function> [options]
 #
-# Options:
-#   --test <test_function>   Specify the test function to execute (required).
-#   --coverage               Run code coverage analysis using kcov.
-#   --workflow               Execute tests via GitHub Actions workflow.
-#   --bats-flags "<flags>"   Pass additional flags to BATS test execution.
+# Example(s):
+#   # Run a test script inside a nested container
+#   bash test/local_test_runner/runner.bash --test test_dind_container
 #
-# Examples:
-#   # Run unit tests for the parser
-#   bash test/local_test_runner/runner.bash --test unit_test_parser
-#
-#   # Run unit tests and capture code coverage
-#   bash test/local_test_runner/runner.bash --test unit_test_parser --coverage
-#
-#   # Run integration tests via GitHub Actions workflow
-#   bash test/local_test_runner/runner.bash --test integration_test_parser --workflow
-#
-#   # Run unit tests with custom BATS flags
-#   bash test/local_test_runner/runner.bash --test unit_test_parser --bats-flags "--timing"
+#   # Run a manual container for interactive debugging
+#   bash test/local_test_runner/runner.bash --test manual_nested_container
 #
 # Requirements:
 #   - Docker installed and running.
@@ -84,10 +82,103 @@ file_check() {
     }
 }
 
+test_dind_container() {
+    # Ensure DinD is running
+    start_dind
+
+    # Sanity check: Ensure the test-readiluks image exists inside DinD
+    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
+        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+        exit 1
+    fi
+
+    create_test_device
+
+     # Run the test container inside DinD and correctly capture its ID
+    CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
+        --privileged --user root \
+        -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --device="${CONFIG[TEST_DEVICE]}" \
+        -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
+        -w "${CONFIG[BASE_DIR]}" \
+        --user "$(id -u):$(id -g)" \
+        "${CONFIG[IMAGENAME]}" bash -c "
+            echo 'TEST_DEVICE in container: \$TEST_DEVICE';
+            lsblk;
+            ls -l /dev/loop*;
+            stat \$TEST_DEVICE;
+            udevadm trigger;
+            udevadm settle;
+            $cmd
+        ")
+
+        # Ensure CONTAINER_ID is not empty
+    if [[ -z "$CONTAINER_ID" ]]; then
+        echo "❌ Failed to start test container inside DinD. Aborting."
+        exit 1
+    fi
+
+    # Attach to the container logs
+    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+
+    # Ensure the test container is properly cleaned up after execution
+    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+
+    # Clean up the loopback device and image file
+    trap EXIT INT TERM
+        cleanup_test_device
+
+}
+
+test_container() {
+    # Ensure DinD is running
+    start_dind
+
+    # Sanity check: Ensure the test-readiluks image exists inside DinD
+    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
+        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+        exit 1
+    fi
+
+    create_test_device
+
+     # Run the test container inside DinD and correctly capture its ID
+    docker run -it \
+        --privileged --user root \
+        -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --device="${CONFIG[TEST_DEVICE]}" \
+        -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
+        -w "${CONFIG[BASE_DIR]}" \
+        --user "$(id -u):$(id -g)" \
+        "${CONFIG[IMAGENAME]}" bash
+
+        # Ensure CONTAINER_ID is not empty
+    if [[ -z "$CONTAINER_ID" ]]; then
+        echo "❌ Failed to start test container inside DinD. Aborting."
+        exit 1
+    fi
+
+    # Attach to the container logs
+    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+
+    # Ensure the test container is properly cleaned up after execution
+    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+
+    # Clean up the loopback device and image file
+    trap EXIT INT TERM
+        cleanup_test_device
+}
+
 # bash test/local_test_runner/runner.bash --test manual_nested_container
 manual_nested_container() {
     docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
         --privileged --user root \
+        --cap-add=MKNOD \
+        --device=/dev/loop-control \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -w "/workspace" \
         "${CONFIG[IMAGENAME]}" bash
@@ -188,7 +279,7 @@ main() {
     parse_arguments "$@"
 
     # Set cleanup trap immediately, ensuring cleanup happens even if something fails
-    trap cleanup EXIT
+    trap 'nested_container_cleanup && cleanup_test_device' EXIT
 
     # Ensure CONFIG[TEST] is a valid function before executing it
     if declare -F "${CONFIG[TEST]}" >/dev/null; then
