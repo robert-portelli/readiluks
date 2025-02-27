@@ -42,6 +42,50 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
+create_test_device() {
+    # Create a temporary image file
+    local img_file
+
+    img_file="/tmp/readiluks-test-device-file.img"
+    truncate -s "${CONFIG[TEST_FILE_SIZE]}" "$img_file"
+
+    # Create a loopback device on the host
+    local loop_device
+    loop_device=$(sudo losetup --show -fP "$img_file" 2>/dev/null)
+    if [[ -z "$loop_device" ]]; then
+        echo "❌ Failed to create loopback device. Aborting."
+        rm -f "$img_file"
+        exit 1
+    fi
+    echo "✅ Loopback device created: $loop_device"
+
+    CONFIG[TEST_FILE]="$img_file"
+    CONFIG[TEST_DEVICE]="$loop_device"
+
+}
+
+cleanup_test_device() {
+    echo "🧹 Cleaning up loopback device and image file..."
+
+    if losetup -j "${CONFIG[TEST_FILE]}" | grep -q "${CONFIG[TEST_DEVICE]}"; then
+        echo "Detaching loop device ${CONFIG[TEST_DEVICE]}..."
+        losetup -d "${CONFIG[TEST_DEVICE]}" || echo "❌ Failed to detach loop device"
+    fi
+
+    if [[ -f "${CONFIG[TEST_FILE]}" ]]; then
+        echo "Removing image file ${CONFIG[TEST_FILE]}..."
+        rm -f "${CONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
+    fi
+
+    if [[ -b "${CONFIG[TEST_DEVICE]}" || -e "${CONFIG[TEST_FILE]}" ]]; then
+        echo "❌ Failed Test Device Cleanup"
+        return 1
+    fi
+
+    echo "✅ Cleanup complete."
+}
+
+
 run_in_docker() {
     local cmd="$1"
 
@@ -53,11 +97,16 @@ run_in_docker() {
         echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
         exit 1
     fi
-     # Run the test container inside DinD and correctly capture its ID
+
+    create_test_device
+
+    # Run the test container inside DinD and correctly capture its ID
     CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
+        --device="${CONFIG[TEST_DEVICE]}" \
+        -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd")
