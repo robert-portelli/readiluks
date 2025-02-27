@@ -60,4 +60,7 @@ declare -gA CONFIG=(
     [DIND_FILE]="docker/test/Dockerfile.dind"
     [DIND_IMAGE]="test-readiluks-dind"
     [DIND_CONTAINER]="test-readiluks-dind-container"
+    [TEST_FILE_SIZE]="1024M"
+    [TEST_FILE]="" # set by _run-in-docker.bash
+    [TEST_DEVICE]="" # set by _run-in-docker.bash
 )
