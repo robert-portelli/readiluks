@@ -2,32 +2,34 @@
 # Filename: test/local_test_runner/lib/_nested-docker-cleanup.bash
 # ------------------------------------------------------------------------------
 # Description:
-#   Provides a cleanup mechanism to ensure no orphaned test containers remain
-#   after execution.
+#   Provides a robust cleanup mechanism to ensure no orphaned test containers
+#   remain and the loopback test device is properly cleaned up after execution.
 #
 # Purpose:
 #   - Ensures all test containers tracked in `/tmp/test_container_id` are removed.
-#   - Handles stale container IDs gracefully.
-#   - Logs cleanup events for debugging.
+#   - Handles stale container IDs gracefully and logs cleanup events for debugging.
+#   - Cleans up the loopback device and associated image file used during tests.
+#   - Verifies that the loopback device is detached and the image file is deleted.
 #
-# Options:
-#   This script does not accept command-line options. It is sourced by the test
-#   runner and its functions.
+# Functions:
+#   - nested_container_cleanup: Cleans up all test containers managed by the
+#     test runner by reading `/tmp/test_container_id`.
+#   - cleanup_test_device: Handles the cleanup of the loopback device and
+#     associated test image file, ensuring no residual resources remain.
 #
 # Usage:
 #   source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
-#   cleanup
+#   nested_container_cleanup
+#   cleanup_test_device
 #
-# Example(s):
+# Example:
 #   # Register cleanup to run on script exit
-#   trap cleanup EXIT
+#   trap "nested_container_cleanup; cleanup_test_device" EXIT
 #
 # Requirements:
-#   - Must be sourced before calling `cleanup()`.
-#   - Requires `_run-in-docker.bash` to ensure test containers are properly
-#     tracked.
-#   - Requires `_runner-config.bash` for test container settings.
-#   - Assumes the test runner writes container IDs to `/tmp/test_container_id`.
+#   - Must be sourced before calling `nested_container_cleanup` or `cleanup_test_device`.
+#   - Requires `_run-in-docker.bash` to ensure test containers are properly tracked.
+#   - Requires `_runner-config.bash` for test container and loopback device settings.
 #
 # Author:
 #   Robert Portelli
@@ -41,7 +43,8 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
-cleanup() {
+
+nested_container_cleanup() {
     local container_id_file="/tmp/test_container_id"
 
     if [[ -f "$container_id_file" ]]; then
@@ -68,4 +71,26 @@ cleanup() {
     else
         echo "✅ No test container to clean up."
     fi
+}
+
+
+cleanup_test_device() {
+    echo "🧹 Cleaning up loopback device and image file..."
+
+    if losetup -j "${CONFIG[TEST_FILE]}" | grep -q "${CONFIG[TEST_DEVICE]}"; then
+        echo "Detaching loop device ${CONFIG[TEST_DEVICE]}..."
+        losetup -d "${CONFIG[TEST_DEVICE]}" || echo "❌ Failed to detach loop device"
+    fi
+
+    if [[ -f "${CONFIG[TEST_FILE]}" ]]; then
+        echo "Removing image file ${CONFIG[TEST_FILE]}..."
+        rm -f "${CONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
+    fi
+
+    if [[ -b "${CONFIG[TEST_DEVICE]}" || -e "${CONFIG[TEST_FILE]}" ]]; then
+        echo "❌ Failed Test Device Cleanup"
+        return 1
+    fi
+
+    echo "✅ Cleanup complete."
 }

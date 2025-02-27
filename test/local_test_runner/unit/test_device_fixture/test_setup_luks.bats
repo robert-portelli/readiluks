@@ -4,7 +4,7 @@ function setup {
     load '../../../lib/_common_setup'
     _common_setup
     source "test/local_test_runner/lib/_device_fixture.bash"
-    create_device
+    register_test_device
 }
 
 function teardown {
@@ -21,33 +21,72 @@ function teardown {
     rm -d /tmp/test
 }
 
-@test "setup_luks produces correct output" {
+@test "DEVCONFIG and REG_FILE have been correctly prepared for setup_luks()" {
+    # Expected keys and their default values
+    declare -A expected_config=(
+        [TEST_DEVICE]="$TEST_DEVICE"
+        [LUKS_PW]="password"
+        [LUKS_LABEL]="TEST_LUKS"
+        [MAPPED_DEVICE]=""
+        [VG_NAME]="vgtest"
+        [LV_NAME]="lvtest"
+        [MAPPED_LVM]=""
+        [FS_TYPE]="btrfs"
+        [MOUNT_POINT]="/mnt/target"
+    )
+
+    # Check that all expected keys exist in DEVCONFIG
+    for key in "${!expected_config[@]}"; do
+        assert [ -v "DEVCONFIG[$key]" ] # Check key existence
+        assert_equal "${DEVCONFIG[$key]}" "${expected_config[$key]}" "Expected ${expected_config[$key]} but got ${DEVCONFIG[$key]} for key $key"
+    done
+
+    # Check that REG_FILE exists and contains expected entries
+    assert_exists "${DEVCONFIG[REG_FILE]}"
+    assert_file_not_empty "${DEVCONFIG[REG_FILE]}"
+
+    run cat "${DEVCONFIG[REG_FILE]}"
+    assert_success
+
+    # Verify expected contents
+    assert_output --partial "LOOPBACK ${DEVCONFIG[TEST_DEVICE]}"
+}
+
+@test "setup_luks() produces correct output" {
     run setup_luks
     assert_success
     assert_output --partial "LUKS container created and opened at ${DEVCONFIG[MAPPED_DEVICE]}"
 }
 
-@test "setup_luks performs correct operations" {
+@test "setup_luks() correctly mutates array: DEVCONFIG and file: REG_FILE" {
     setup_luks
 
-    # test the DEVCONFIG
-    assert_equal "${DEVCONFIG[IMG_SIZE]}" "1024M"
-    assert_equal "${DEVCONFIG[LUKS_PW]}" "password"
-    assert_equal "${DEVCONFIG[LUKS_LABEL]}" "TEST_LUKS"
-    assert_equal "${DEVCONFIG[VG_NAME]}" "vgtest"
-    assert_equal "${DEVCONFIG[LV_NAME]}" "lvtest"
-    assert_equal "${DEVCONFIG[FS_TYPE]}" "btrfs"
-    assert_equal "${DEVCONFIG[MOUNT_POINT]}" "/mnt/target"
-    assert_equal "${DEVCONFIG[MAPPED_DEVICE]}" "/dev/mapper/TEST_LUKS"
-    assert_equal "${DEVCONFIG[MAPPED_LVM]}" ""
-    assert_file_exist "${DEVCONFIG[IMG_FILE]}"
-    run echo "${DEVCONFIG[IMG_FILE]}"
-    assert_output --regexp "^/tmp/device-[a-zA-Z0-9]+\\.img$"
-    assert [ -b "${DEVCONFIG[TEST_DEVICE]}" ]
-    assert_file_exist "${DEVCONFIG[REG_FILE]}"
+    # correctly assigns value to DEVCONFIG[MAPPED_DEVICE]
+    assert_equal "${DEVCONFIG[MAPPED_DEVICE]}" "/dev/mapper/${DEVCONFIG[LUKS_LABEL]}"
 
-    # is it actually luks
-    run cryptsetup luksDump "${DEVCONFIG[TEST_DEVICE]}"
+    # correctly writes DEVCONFIG[MAPPED_DEVICE] to REG_FILE
+    assert_file_exists "${DEVCONFIG[REG_FILE]}"
+
+    run cat "${DEVCONFIG[REG_FILE]}"
+
+    ## verify contents added by setup_luks()
+    assert_output --partial "LUKS ${DEVCONFIG[MAPPED_DEVICE]}"
+}
+
+@test "LUKS metadata is removed by teardown_device()" {
+    setup_luks
+
+    # Verify that the device is initially a LUKS container
+    run cryptsetup isLuks "$TEST_DEVICE"
+    # Expected $TEST_DEVICE to be a LUKS container before teardown
     assert_success
 
+    # Run teardown and verify LUKS metadata is removed
+    run teardown_device
+    assert_success
+
+    # Verify that the device is no longer recognized as a LUKS container
+    run cryptsetup isLuks "$TEST_DEVICE"
+    # Expected $TEST_DEVICE to no longer be a LUKS container after teardown
+    assert_failure
 }

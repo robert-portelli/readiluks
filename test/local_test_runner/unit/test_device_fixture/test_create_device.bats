@@ -1,4 +1,4 @@
-# shellcheck disable=SC2119
+# shellcheck disable=SC2119,SC2030,SC2031
 
 function setup {
     load '../../../lib/_common_setup'
@@ -20,100 +20,50 @@ function teardown {
     rm -d /tmp/test
 }
 
-@test "DEVCONFIG default values are correctly set" {
-    run print_devconfig
+@test "DEVCONFIG is initialized correctly" {
+    # Expected keys and their default values
+    declare -A expected_config=(
+        [TEST_DEVICE]=""
+        [LUKS_PW]="password"
+        [LUKS_LABEL]="TEST_LUKS"
+        [MAPPED_DEVICE]=""
+        [VG_NAME]="vgtest"
+        [LV_NAME]="lvtest"
+        [MAPPED_LVM]=""
+        [FS_TYPE]="btrfs"
+        [MOUNT_POINT]="/mnt/target"
+    )
+
+    # Check that all expected keys exist in DEVCONFIG
+    for key in "${!expected_config[@]}"; do
+        assert [ -v "DEVCONFIG[$key]" ] # Check key existence
+        assert_equal "${DEVCONFIG[$key]}" "${expected_config[$key]}" "Expected ${expected_config[$key]} but got ${DEVCONFIG[$key]} for key $key"
+    done
+
+    # Check that REG_FILE exists and is empty
+    assert_exists "${DEVCONFIG[REG_FILE]}"
+    assert_file_empty "${DEVCONFIG[REG_FILE]}"
+}
+
+@test "environment variable 'TEST_DEVICE' is a block device" {
+    assert [ -b "$TEST_DEVICE" ]
+}
+
+@test "register_test_device() produces expected output" {
+    run register_test_device
     assert_success
-    assert_output --partial 'IMG_SIZE=1024M'
-    assert_output --partial 'LUKS_PW=password'
-    assert_output --partial 'LUKS_LABEL=TEST_LUKS'
-    assert_output --partial 'VG_NAME=vgtest'
-    assert_output --partial 'LV_NAME=lvtest'
-    assert_output --partial 'FS_TYPE=btrfs'
-    assert_output --partial 'MOUNT_POINT=/mnt/target'
-    refute_output --partial 'MAPPED_LVM=*'
-    refute_output --partial 'MAPPED_DEVICE=*'
-    refute_output --partial 'REG_FILE=*'
-    refute_output --partial 'TEST_DEVICE=*'
-
+    refute_output -p "ERROR: $TEST_DEVICE is not a block device"
+    assert_output -p "Found and registered loop device: ${DEVCONFIG[TEST_DEVICE]}"
 }
 
-@test "create_device can be safely called multiple times" {
-    export DEVICE_FIXTURE_NO_TRAP=1
-    create_device
-    first_device="${DEVCONFIG[TEST_DEVICE]}"
-    first_image="${DEVCONFIG[IMG_FILE]}"
-
-    # Capture values after the first run for debugging
-    echo "First Device: $first_device" >&2
-    echo "First Image: $first_image" >&2
-
-    # Ensure first device creation succeeded
-    assert_file_exist "$first_image"
-    assert [ -b "$first_device" ] || fail "First loop device is missing"
-
-    # Clean up the first device before calling create_device again
-    #losetup -d "$first_device" || echo "Warning: Failed to detach loop device $first_device" >&2
-    #rm -f "$first_image"
-
-    create_device
-    second_device="${DEVCONFIG[TEST_DEVICE]}"
-    second_image="${DEVCONFIG[IMG_FILE]}"
-
-    echo "Second Device: $second_device" >&2
-    echo "Second Image: $second_image" >&2
-
-    assert_file_exist "$second_image"
-    assert [ -b "$second_device" ] || fail "Second loop device is missing"
-    #[[ "$first_device" != "$second_device" ]]
-    #assert [ "$first_device" != "$second_device" ]
-    #assert [ "$first_image" != "$second_image" ]
+@test "register_test_device() assigns env var TEST_DEVICE to array DEVCONFIG[TEST_DEVICE]" {
+    register_test_device
+    assert_equal "${DEVCONFIG[TEST_DEVICE]}" "$TEST_DEVICE"
 }
 
-
-@test "function create_device produces expected output" {
-    run create_device
-    assert_success
-    refute_output --partial "Failed to create loop device for ${DEVCONFIG[IMG_FILE]}"
-    assert_output --partial "Created loop device: ${DEVCONFIG[TEST_DEVICE]}"
-    assert_output --partial "backed by ${DEVCONFIG[IMG_FILE]}"
-}
-
-@test "function create_device creates the image file" {
-    create_device
-
-    # The image file was created
-    assert_file_exist "${DEVCONFIG[IMG_FILE]}"
-
-    # The image file is the size defined by DEVCONFIG[IMG_SIZE]
-    #### Get the actual file size in bytes
-    run stat -c "%s" "${DEVCONFIG[IMG_FILE]}" # avoid false positive or misleading errors
-    actual_size="$output"
-
-    #### Convert DEVCONFIG[IMG_SIZE] to bytes (assuming it ends in M for megabytes)
-    expected_size=$(( ${DEVCONFIG[IMG_SIZE]%M} * 1024 * 1024 ))
-
-    assert_equal "$actual_size" "$expected_size"
-
-    # The correct filename was given to the image file
-    run echo "${DEVCONFIG[IMG_FILE]}"
-    assert_output --regexp "^/tmp/device-[a-zA-Z0-9]+\\.img$"
-}
-
-@test "function create_device creates a loopback device from the image file" {
-    create_device
-
-    # The loopback block device was created
-    assert [ -b "${DEVCONFIG[TEST_DEVICE]}" ]
-}
-
-@test "function create_device creates a registry file" {
-    create_device
-
-    # Ensure the registry file exists
-    assert_file_exist "${DEVCONFIG[REG_FILE]}"
-
-    # Wait to ensure file system sync
-    sync && sleep 0.1
+@test "register_test_device() writes DEVCONFIG[TEST_DEVICE] to REG_FILE" {
+    register_test_device
+    assert_file_exists "${DEVCONFIG[REG_FILE]}"
 
     # Explicitly read and print the file contents for debugging
     run cat "${DEVCONFIG[REG_FILE]}"
@@ -124,10 +74,35 @@ function teardown {
 
     # Verify expected contents
     assert_output --partial "LOOPBACK ${DEVCONFIG[TEST_DEVICE]}"
-    assert_output --partial "IMAGE ${DEVCONFIG[IMG_FILE]}"
 
     # Ensure registry filename follows expected pattern
     run basename "${DEVCONFIG[REG_FILE]}"
     assert_success
     assert_output --regexp "^device_fixture_registry-[a-zA-Z0-9]+\\.log$"
+}
+
+@test "register_test_device() handles non-block devices gracefully" {
+    TEST_DEVICE="/dev/null"  # Intentionally use a non-block device
+    run register_test_device
+    assert_failure
+    assert_output --partial "ERROR: /dev/null is not a block device"
+}
+
+@test "Full device lifecycle from registration to teardown" {
+    run register_test_device
+    assert_success
+    assert_output --partial "Found and registered loop device: ${DEVCONFIG[TEST_DEVICE]}"
+
+    # Check that the device is registered in the REG_FILE
+    assert_file_exists "${DEVCONFIG[REG_FILE]}"
+    run cat "${DEVCONFIG[REG_FILE]}"
+    assert_output --partial "LOOPBACK ${DEVCONFIG[TEST_DEVICE]}"
+
+    # Now test teardown
+    run teardown_device
+    assert_success
+    assert_file_not_exists "${DEVCONFIG[REG_FILE]}"
+
+    # Re-assign TEST_DEVICE to DEVCONFIG array to avoid subshell scoping issues
+    DEVCONFIG[TEST_DEVICE]="$TEST_DEVICE"
 }
