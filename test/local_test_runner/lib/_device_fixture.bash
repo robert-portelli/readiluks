@@ -220,6 +220,7 @@ teardown_device() {
                             echo "Waiting for physical volume $value to be removed..." >&2
                             sleep 0.5
                         done
+                        dmsetup remove "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to remove device-mapper entry" >&2
                         udevadm settle
                         ;;
                     LUKS)
