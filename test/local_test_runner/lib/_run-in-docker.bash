@@ -2,7 +2,7 @@
 # Filename: test/local_test_runner/lib/_run-in-docker.bash
 # ------------------------------------------------------------------------------
 # Description:
-#   Manages the execution of a nested test container inside the Docker-in-Docker
+#   Manages the execution of a nested test container inside the outer Docker-in-Docker
 #   (DinD) environment, including loopback device management for testing.
 #
 # Purpose:
@@ -29,7 +29,7 @@
 #   run_in_docker "bats test/unit/test_parser.bats"
 #
 # Requirements:
-#   - Requires `_docker-in-docker.bash` for ensuring DinD is running.
+#   - Requires `_manage_outer_docker.bash` for ensuring DinD is running.
 #   - Requires `_runner-config.bash` for global configuration variables.
 #   - Assumes the DinD container is running and the test image is available.
 #

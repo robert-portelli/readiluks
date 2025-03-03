@@ -1,23 +1,23 @@
 # ==============================================================================
-# Filename: test/local_test_runner/lib/_docker-in-docker.bash
+# Filename: test/local_test_runner/lib/_manage_outer_docker.bash
 # ------------------------------------------------------------------------------
 # Description:
-#   Manages the lifecycle of the Docker-in-Docker (DinD) container used for
-#   isolated test execution. Ensures that DinD is running and that the required
+#   Manages the lifecycle of the outer Docker-in-Docker (DinD) container used for
+#   isolated test execution. Ensures that outer DinD is running and that the required
 #   test image is available inside it.
 #
 # Purpose:
-#   - Starts the DinD container (`docker:dind` with custom setup) if it is not already running.
+#   - Starts the outer DinD container (`docker:dind` with custom setup) if it is not already running.
 #   - Ensures the test image (`robertportelli/test-readiluks:latest`) is available inside DinD.
 #   - Provides an isolated Docker environment for executing tests.
-#   - Uses the Dockerfile at `docker/test/Dockerfile.dind` to build the DinD image.
+#   - Uses the Dockerfile at `docker/test/Dockerfile.outer` to build the DinD image.
 #
 # Options:
 #   This script does not accept command-line options. It is sourced by the test
 #   runner and its functions.
 #
 # Usage:
-#   source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
+#   source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
 #   start_dind
 #
 # Example(s):
@@ -42,7 +42,7 @@
 # ==============================================================================
 
 start_dind() {
-    echo "🚀 Ensuring Docker-in-Docker container is running..."
+    echo "🚀 Ensuring Outer Docker-in-Docker container is running..."
 
     # Check if the DinD image exists, build if necessary
     if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[DIND_IMAGE]}"; then
@@ -77,7 +77,7 @@ start_dind() {
             echo "⚠️  Image ${CONFIG[IMAGENAME]} not found locally. Attempting to build first..."
 
             # Try to build the image locally first
-            if ! docker build --load -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile .; then
+            if ! docker build --load -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile.inner .; then
                 echo "❌ Build failed. Attempting to pull from Docker Hub..."
 
                 # If build fails, attempt to pull from Docker Hub

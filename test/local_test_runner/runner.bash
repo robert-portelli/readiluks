@@ -41,9 +41,9 @@
 #       - `robertportelli/test-readiluks:latest`: Test container based on Arch Linux.
 #       - `docker:dind`: Docker-in-Docker (DinD) container used for isolated testing.
 #   - The following Dockerfiles are packaged with the repository:
-#       - `docker/test/Dockerfile`: Defines the test environment and is pushed to Docker Hub.
-#       - `docker/test/Dockerfile.dind`: Defines the DinD environment used for nested containers.
-#   - The DinD container must be running for isolated test execution.
+#       - `docker/test/Dockerfile.inner`: Defines the test environment and is pushed to Docker Hub.
+#       - `docker/test/Dockerfile.outer`: Defines the DinD environment used for nested containers.
+#   - The outer DinD container must be running for isolated test execution.
 #
 # Author:
 #   Robert Portelli
@@ -63,7 +63,7 @@ BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_runner-config.bash"
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
-    source "$BASEDIR/test/local_test_runner/lib/_docker-in-docker.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
     source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"

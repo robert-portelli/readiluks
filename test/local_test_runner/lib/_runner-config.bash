@@ -10,8 +10,10 @@
 #   - Standardizes test execution options (unit, integration, workflow, coverage).
 #   - Manages Docker-in-Docker (DinD) setup for isolated testing.
 #   - Provides a single source of truth for image and container names.
-#   - Defines the test container (`robertportelli/test-readiluks:latest`) built from `docker/test/Dockerfile`.
-#   - Defines the DinD container (`docker:dind`) with customizations from `docker/test/Dockerfile.dind`.
+#   - Defines the **inner test container** (`robertportelli/test-readiluks-inner:latest`)
+#     built from `docker/test/Dockerfile.inner`.
+#   - Defines the **outer DinD container** (`test-readiluks-outer`) with customizations
+#     from `docker/test/Dockerfile.outer`.
 #
 # Options:
 #   This script does not accept command-line options. It is sourced by the test
@@ -49,17 +51,18 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
+
 declare -gA CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-    [IMAGENAME]="robertportelli/test-readiluks:latest"
+    [IMAGENAME]="robertportelli/test-readiluks-inner:latest"
     [DOCKERIMAGE]="ubuntu-latest=${CONFIG[IMAGENAME]}"
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
     [BATS_FLAGS]=""
-    [DIND_FILE]="docker/test/Dockerfile.dind"
-    [DIND_IMAGE]="test-readiluks-dind"
-    [DIND_CONTAINER]="test-readiluks-dind-container"
+    [DIND_FILE]="docker/test/Dockerfile.outer"
+    [DIND_IMAGE]="test-readiluks-outer"
+    [DIND_CONTAINER]="test-readiluks-outer-container"
     [TEST_FILE_SIZE]="1024M"
     [TEST_FILE]="" # set by _run-in-docker.bash
     [TEST_DEVICE]="" # set by _run-in-docker.bash

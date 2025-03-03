@@ -32,14 +32,14 @@ git clone https://github.com/robert-portelli/readiluks.git
 cd readiluks
 ```
 
-#### Build the test container
+#### Build and start the outer DinD container
 ```bash
-docker buildx build --load -t robertportelli/test-readiluks:latest -f docker/test/Dockerfile .
+docker buildx build --load -t test-readiluks-outer -f docker/test/Dockerfile.outer .
 ```
 
-#### (Optional) Build the DinD container
+#### Build the inner test container
 ```bash
-docker buildx build --load -t test-readiluks-dind -f docker/test/Dockerfile.dind .
+docker buildx build --load -t robertportelli/test-readiluks-inner:latest -f docker/test/Dockerfile.inner .
 ```
 ---
 ## 🧪 Running Tests
@@ -80,8 +80,8 @@ bash test/local_test_runner/runner.bash --test test_device_fixture/test_teardown
 .
 ├── docker
 │   └── test
-│       ├── Dockerfile          # Defines the test container environment (Arch Linux + test dependencies)
-│       └── Dockerfile.dind     # Defines the Docker-in-Docker (DinD) container for isolated testing
+│       ├── Dockerfile.inner    # Defines the test container environment (Arch Linux + test dependencies)
+│       └── Dockerfile.outer    # Defines the Docker-in-Docker (DinD) container for isolated testing
 ├── src
 │   ├── lib
 │   │   ├── _log_levels.bash    # Defines logging severity levels for standardized log output
@@ -97,7 +97,7 @@ bash test/local_test_runner/runner.bash --test test_device_fixture/test_teardown
     ├── local_test_runner
     │   ├── lib
     │   │   ├── _device_fixture.bash       # Core device management functions
-    │   │   ├── _docker-in-docker.bash     # Manages DinD container lifecycle
+    │   │   ├── _manage_outer_docker.bash     # Manages DinD container lifecycle
     │   │   ├── _nested-docker-cleanup.bash # Ensures cleanup of test containers
     │   │   ├── _parser.bash               # Parses test runner arguments
     │   │   ├── _run-in-docker.bash        # Executes requested tests inside nested test containers
