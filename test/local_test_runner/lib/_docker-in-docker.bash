@@ -2,7 +2,7 @@
 # Filename: test/local_test_runner/lib/_docker-in-docker.bash
 # ------------------------------------------------------------------------------
 # Description:
-#   Manages the lifecycle of the Docker-in-Docker (DinD) container used for
+#   Manages the lifecycle of the outer Docker-in-Docker (DinD) container used for
 #   isolated test execution. Ensures that DinD is running and that the required
 #   test image is available inside it.
 #
@@ -10,7 +10,7 @@
 #   - Starts the DinD container (`docker:dind` with custom setup) if it is not already running.
 #   - Ensures the test image (`robertportelli/test-readiluks:latest`) is available inside DinD.
 #   - Provides an isolated Docker environment for executing tests.
-#   - Uses the Dockerfile at `docker/test/Dockerfile.dind` to build the DinD image.
+#   - Uses the Dockerfile at `docker/test/Dockerfile.outer` to build the DinD image.
 #
 # Options:
 #   This script does not accept command-line options. It is sourced by the test
@@ -77,7 +77,7 @@ start_dind() {
             echo "⚠️  Image ${CONFIG[IMAGENAME]} not found locally. Attempting to build first..."
 
             # Try to build the image locally first
-            if ! docker build --load -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile .; then
+            if ! docker build --load -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile.inner .; then
                 echo "❌ Build failed. Attempting to pull from Docker Hub..."
 
                 # If build fails, attempt to pull from Docker Hub

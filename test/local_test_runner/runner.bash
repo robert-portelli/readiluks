@@ -41,8 +41,8 @@
 #       - `robertportelli/test-readiluks:latest`: Test container based on Arch Linux.
 #       - `docker:dind`: Docker-in-Docker (DinD) container used for isolated testing.
 #   - The following Dockerfiles are packaged with the repository:
-#       - `docker/test/Dockerfile`: Defines the test environment and is pushed to Docker Hub.
-#       - `docker/test/Dockerfile.dind`: Defines the DinD environment used for nested containers.
+#       - `docker/test/Dockerfile.inner`: Defines the test environment and is pushed to Docker Hub.
+#       - `docker/test/Dockerfile.outer`: Defines the DinD environment used for nested containers.
 #   - The DinD container must be running for isolated test execution.
 #
 # Author:
