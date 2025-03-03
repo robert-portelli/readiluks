@@ -97,7 +97,7 @@ bash test/local_test_runner/runner.bash --test test_device_fixture/test_teardown
     ├── local_test_runner
     │   ├── lib
     │   │   ├── _device_fixture.bash       # Core device management functions
-    │   │   ├── _docker-in-docker.bash     # Manages DinD container lifecycle
+    │   │   ├── _manage_outer_docker.bash     # Manages DinD container lifecycle
     │   │   ├── _nested-docker-cleanup.bash # Ensures cleanup of test containers
     │   │   ├── _parser.bash               # Parses test runner arguments
     │   │   ├── _run-in-docker.bash        # Executes requested tests inside nested test containers
