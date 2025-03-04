@@ -191,8 +191,11 @@ teardown_device() {
                             sleep 0.5
                         done
                         rm -rf "$value" || echo "Failed to remove mount point $value" >&2
+                        wipefs -a "${DEVCONFIG[MAPPED_LVM]}" || "Failed to wipe filesystem signatures on $value" >&2
+
                         udevadm settle
-                        ;;                    LVM_LV)
+                        ;;
+                    LVM_LV)
                         echo "Deactivating and removing logical volume $value..." >&2
                         lvchange -an "$value" || echo "Failed to deactivate LV" >&2
                         lvremove -f "$value" || echo "Failed to remove LV" >&2
@@ -200,7 +203,18 @@ teardown_device() {
                             echo "Waiting for logical volume $value to be removed..." >&2
                             sleep 0.5
                         done
-                        udevadm settle
+
+                        # Ensure device-mapper entry is fully removed
+                        echo "Removing device-mapper entry for ${DEVCONFIG[MAPPED_LVM]}..." >&2
+                        dmsetup remove "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to remove device-mapper entry" >&2
+
+                        # Wait until the device is no longer listed
+                        while dmsetup info "${DEVCONFIG[MAPPED_LVM]}" &>/dev/null; do
+                            echo "Waiting for dmsetup to fully remove ${DEVCONFIG[MAPPED_LVM]}..." >&2
+                            sleep 0.5
+                        done
+
+                        sync && udevadm settle
                         ;;
                     LVM_VG)
                         echo "Deactivating and removing volume group $value..." >&2
@@ -212,6 +226,7 @@ teardown_device() {
                         done
                         udevadm settle
                         ;;
+
                     LVM_PV)
                         echo "Wiping and removing physical volume $value..." >&2
                         pvremove -ff -y "$value" || echo "Failed to remove PV" >&2
@@ -220,7 +235,6 @@ teardown_device() {
                             echo "Waiting for physical volume $value to be removed..." >&2
                             sleep 0.5
                         done
-                        dmsetup remove "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to remove device-mapper entry" >&2
                         udevadm settle
                         ;;
                     LUKS)
@@ -290,6 +304,3 @@ print_devconfig() {
         echo "$key=${DEVCONFIG[$key]}"
     done
 }
-
-# Ensure teardown_device() runs when the script exits or gets interrupted
-#trap teardown_device EXIT INT TERM
