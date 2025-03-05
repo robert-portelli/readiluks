@@ -4,7 +4,7 @@ function setup {
     load '../../../lib/_common_setup'
     _common_setup
     source "test/local_test_runner/lib/_device_fixture.bash"
-    create_device
+    register_test_device
     setup_luks
     setup_lvm
     format_filesystem
