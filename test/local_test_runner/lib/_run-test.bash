@@ -76,14 +76,16 @@ run_test() {
         run_in_docker "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
     fi
 
-    # Run kcov if --coverage was passed
+    # Run kcov if --coverage was passed to local_test_runner/runner.bash
     if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
         echo "📊 Running coverage analysis..."
+
+        # Run coverage analysis inside the test container
         run_in_docker "kcov_dir=\$(mktemp -d) && \
-                       echo '📂 Temporary kcov directory: \$kcov_dir' && \
-                       kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' && \
-                       echo '📝 Uncovered lines:' && \
-                       grep 'covered=\"false\"' \"\$kcov_dir/bats/sonarqube.xml\" || echo '✅ All lines covered.' && \
+                       kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' > /dev/null 2>&1 && \
+                       grep 'covered=\"false\"' \"\$kcov_dir/bats/sonarqube.xml\" | \
+                       sed -n 's/.*lineNumber=\"\([0-9]*\)\".*/📍 Line \1 uncovered/p' || \
+                       echo '✅ All lines covered.' && \
                        rm -rf \"\$kcov_dir\""
     fi
 
