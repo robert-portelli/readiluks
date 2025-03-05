@@ -69,20 +69,9 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
 }
 
-file_check() {
-    local source_file="$1"
-    local test_file="$2"
-
-    # Fail if either file is missing
-    [[ -f "$source_file" && -f "$test_file" ]] || {
-        echo "❌ ERROR: One or more required files are missing:" >&2
-        [[ -f "$source_file" ]] || echo "   - ❌ Missing: $source_file" >&2
-        [[ -f "$test_file" ]] || echo "   - ❌ Missing: $test_file" >&2
-        return 1
-    }
-}
 
 test_dind_container() {
+    # this is manual debugging test
     # Ensure DinD is running
     start_dind
 
@@ -133,6 +122,7 @@ test_dind_container() {
 }
 
 test_container() {
+    # this is manual debugging test
     # Ensure DinD is running
     start_dind
 
@@ -175,6 +165,7 @@ test_container() {
 
 # bash test/local_test_runner/runner.bash --test manual_nested_container
 manual_nested_container() {
+    # this is manual debugging test
     docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
         --privileged --user root \
         --cap-add=MKNOD \
@@ -272,6 +263,20 @@ integration_test_parser() {
 
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 
+}
+
+
+file_check() {
+    local source_file="$1"
+    local test_file="$2"
+
+    # Fail if either file is missing
+    [[ -f "$source_file" && -f "$test_file" ]] || {
+        echo "❌ ERROR: One or more required files are missing:" >&2
+        [[ -f "$source_file" ]] || echo "   - ❌ Missing: $source_file" >&2
+        [[ -f "$test_file" ]] || echo "   - ❌ Missing: $test_file" >&2
+        return 1
+    }
 }
 
 main() {
