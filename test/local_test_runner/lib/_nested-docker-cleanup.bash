@@ -72,25 +72,3 @@ nested_container_cleanup() {
         echo "✅ No test container to clean up."
     fi
 }
-
-
-cleanup_test_device() {
-    echo "🧹 Cleaning up loopback device and image file..."
-
-    if losetup -j "${CONFIG[TEST_FILE]}" | grep -q "${CONFIG[TEST_DEVICE]}"; then
-        echo "Detaching loop device ${CONFIG[TEST_DEVICE]}..."
-        losetup -d "${CONFIG[TEST_DEVICE]}" || echo "❌ Failed to detach loop device"
-    fi
-
-    if [[ -f "${CONFIG[TEST_FILE]}" ]]; then
-        echo "Removing image file ${CONFIG[TEST_FILE]}..."
-        rm -f "${CONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
-    fi
-
-    if [[ -b "${CONFIG[TEST_DEVICE]}" || -e "${CONFIG[TEST_FILE]}" ]]; then
-        echo "❌ Failed Test Device Cleanup"
-        return 1
-    fi
-
-    echo "✅ Cleanup complete."
-}

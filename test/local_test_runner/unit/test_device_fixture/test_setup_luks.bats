@@ -56,6 +56,7 @@ function teardown {
     run setup_luks
     assert_success
     assert_output --partial "LUKS container created and opened at ${DEVCONFIG[MAPPED_DEVICE]}"
+    refute_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} is not a valid block device."
 }
 
 @test "setup_luks() correctly mutates array: DEVCONFIG and file: REG_FILE" {

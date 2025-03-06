@@ -69,20 +69,50 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
 }
 
-file_check() {
-    local source_file="$1"
-    local test_file="$2"
+filter_uncovered_lines() {
+    local test_functions=("$@")
 
-    # Fail if either file is missing
-    [[ -f "$source_file" && -f "$test_file" ]] || {
-        echo "❌ ERROR: One or more required files are missing:" >&2
-        [[ -f "$source_file" ]] || echo "   - ❌ Missing: $source_file" >&2
-        [[ -f "$test_file" ]] || echo "   - ❌ Missing: $test_file" >&2
-        return 1
-    }
+    local uncovered_tmp
+    uncovered_tmp="$(mktemp)"
+
+    #echo "📊 Running cumulative coverage analysis for: $source_file"
+
+    for test_function in "${test_functions[@]}"; do
+        echo "🔍 Running $test_function..."
+
+        # Capture uncovered lines from the current test
+        local uncovered_output
+        uncovered_output="$($test_function)"
+
+        # If uncovered_tmp is empty, initialize it with the first uncovered output
+        if [[ ! -s "$uncovered_tmp" ]]; then
+            echo "$uncovered_output" > "$uncovered_tmp"
+        else
+            # Compare and filter uncovered lines
+            awk 'NR==FNR{a[$0]; next} !($0 in a)' "$uncovered_tmp" <(echo "$uncovered_output") > "${uncovered_tmp}.new"
+            mv "${uncovered_tmp}.new" "$uncovered_tmp"
+        fi
+    done
+
+    # Final uncovered lines output
+    echo "📊 Final uncovered lines after all tests:"
+    cat "$uncovered_tmp"
+    rm -f "$uncovered_tmp"
 }
 
+test_device_fixture() {
+    filter_uncovered_lines \
+        test_device_fixture_setup_lvm \
+        test_device_fixture_setup_luks \
+        test_device_fixture_create_device \
+        test_device_fixture_format_filesystem \
+        test_device_fixture_teardown_device
+}
+
+
+
 test_dind_container() {
+    # this is manual debugging test
     # Ensure DinD is running
     start_dind
 
@@ -133,6 +163,7 @@ test_dind_container() {
 }
 
 test_container() {
+    # this is manual debugging test
     # Ensure DinD is running
     start_dind
 
@@ -175,6 +206,7 @@ test_container() {
 
 # bash test/local_test_runner/runner.bash --test manual_nested_container
 manual_nested_container() {
+    # this is manual debugging test
     docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
         --privileged --user root \
         --cap-add=MKNOD \
@@ -274,12 +306,26 @@ integration_test_parser() {
 
 }
 
+
+file_check() {
+    local source_file="$1"
+    local test_file="$2"
+
+    # Fail if either file is missing
+    [[ -f "$source_file" && -f "$test_file" ]] || {
+        echo "❌ ERROR: One or more required files are missing:" >&2
+        [[ -f "$source_file" ]] || echo "   - ❌ Missing: $source_file" >&2
+        [[ -f "$test_file" ]] || echo "   - ❌ Missing: $test_file" >&2
+        return 1
+    }
+}
+
 main() {
     load_libraries
     parse_arguments "$@"
 
     # Set cleanup trap immediately, ensuring cleanup happens even if something fails
-    trap 'nested_container_cleanup && cleanup_test_device' EXIT
+    trap 'nested_container_cleanup' EXIT
 
     # Ensure CONFIG[TEST] is a valid function before executing it
     if declare -F "${CONFIG[TEST]}" >/dev/null; then
