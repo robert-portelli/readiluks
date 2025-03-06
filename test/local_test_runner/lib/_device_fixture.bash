@@ -183,8 +183,15 @@ teardown_device() {
             for value in ${REGFILE[$type]}; do
                 case "$type" in
                     MOUNT)
-                        echo "Unmounting $value..." >&2
-                        fuser -km "$value" || echo "No blocking processes on $value" >&2
+                        echo "Unmounting $value and wiping filesystem signatures..." >&2
+                        mount -o remount,ro "$value" 2>/dev/null
+                        if fuser -m "$value" >/dev/null 2>&1; then
+                            echo "Killing processes using $value..." >&2
+                            fuser -km "$value"
+                            sleep 1  # Give processes time to terminate
+                        else
+                            echo "No blocking processes on $value" >&2
+                        fi
                         umount -l "$value" || echo "Failed to unmount $value" >&2
                         while mountpoint -q "$value"; do
                             echo "Waiting for $value to unmount..." >&2
@@ -194,11 +201,12 @@ teardown_device() {
                         wipefs -a "${DEVCONFIG[MAPPED_LVM]}" || "Failed to wipe filesystem signatures on $value" >&2
 
                         udevadm settle
+                        echo "Finished unmounting $value and wiping filesystem signatures" >&2
                         ;;
                     LVM_LV)
                         echo "Deactivating and removing logical volume $value..." >&2
-                        lvchange -an "$value" || echo "Failed to deactivate LV" >&2
-                        lvremove -f "$value" || echo "Failed to remove LV" >&2
+                        lvchange -an "$value" || echo "Failed to deactivate $value" >&2
+                        lvremove -f "$value" || echo "Failed to remove $value" >&2
                         while lvs "$value" &>/dev/null; do
                             echo "Waiting for logical volume $value to be removed..." >&2
                             sleep 0.5
@@ -215,27 +223,30 @@ teardown_device() {
                         done
 
                         sync && udevadm settle
+                        echo "Finished deactivating and removing logical volume $value" >&2
                         ;;
                     LVM_VG)
                         echo "Deactivating and removing volume group $value..." >&2
-                        vgchange -an "$value" || echo "Failed to deactivate VG" >&2
-                        vgremove -f "$value" || echo "Failed to remove VG" >&2
+                        vgchange -an "$value" || echo "Failed to deactivate $value" >&2
+                        vgremove -f "$value" || echo "Failed to remove $value" >&2
                         while vgs "$value" &>/dev/null; do
                             echo "Waiting for volume group $value to be removed..." >&2
                             sleep 0.5
                         done
                         udevadm settle
+                        echo "Finished deactivating and removing volume group $value" >&2
                         ;;
 
                     LVM_PV)
                         echo "Wiping and removing physical volume $value..." >&2
-                        pvremove -ff -y "$value" || echo "Failed to remove PV" >&2
+                        pvremove -ff -y "$value" || echo "Failed to remove $value" >&2
                         wipefs -a "$value" || echo "Failed to wipe filesystem signatures on $value" >&2
                         while pvs "$value" &>/dev/null; do
                             echo "Waiting for physical volume $value to be removed..." >&2
                             sleep 0.5
                         done
                         udevadm settle
+                        echo "Finished wiping and removing physical volume $value" >&2
                         ;;
                     LUKS)
                         echo "Closing LUKS container $value..." >&2
@@ -248,20 +259,23 @@ teardown_device() {
                         udevadm settle
 
                         # Overwrite the LUKS header to remove LUKS metadata
-                        echo "Wiping LUKS header on ${DEVCONFIG[TEST_DEVICE]}..." >&2
+                        echo "Wiping LUKS header from $value..." >&2
+
+                        # TODO: doesn't cryptsetup have a function for this?
                         dd if=/dev/zero of="${DEVCONFIG[TEST_DEVICE]}" bs=1M count=10 status=none || {
-                            echo "Failed to wipe LUKS header on ${DEVCONFIG[TEST_DEVICE]}" >&2
+                            echo "Failed to wipe LUKS header on $value" >&2
                         }
 
                         # Verify that the device is no longer a LUKS container
                         if cryptsetup isLuks "${DEVCONFIG[TEST_DEVICE]}"; then
-                            echo "ERROR: ${DEVCONFIG[TEST_DEVICE]} is still a LUKS container after wipe." >&2
+                            echo "ERROR: $value is still a LUKS container after wipe." >&2
                             return 1
                         else
-                            echo "LUKS metadata successfully removed from ${DEVCONFIG[TEST_DEVICE]}." >&2
+                            echo "LUKS metadata successfully removed from $value." >&2
                         fi
 
                         sync && sleep 1
+                        echo "Finished closing LUKS container $value" >&2
                         ;;
                     LOOPBACK)
                         echo "Resetting loop device $value..." >&2
@@ -297,10 +311,4 @@ teardown_device() {
     # Remove registry file after successful cleanup
     rm -f "${DEVCONFIG[REG_FILE]}"
     echo "Teardown complete." >&2
-}
-
-print_devconfig() {
-    for key in "${!DEVCONFIG[@]}"; do
-        echo "$key=${DEVCONFIG[$key]}"
-    done
 }
