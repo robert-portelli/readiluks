@@ -81,7 +81,7 @@ cleanup_test_device() {
         rm -f "${CONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
     fi
 
-    if [[ -b "${CONFIG[TEST_DEVICE]}" || -e "${CONFIG[TEST_FILE]}" ]]; then
+    if losetup -l | grep -q "${CONFIG[TEST_DEVICE]}" || [[ -f "${CONFIG[TEST_FILE]}" ]]; then
         echo "❌ Failed Test Device Cleanup"
         return 1
     fi
@@ -127,4 +127,5 @@ run_in_docker() {
     # Ensure the test container is properly cleaned up after execution
     docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
     docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+    cleanup_test_device
 }
