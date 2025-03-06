@@ -26,15 +26,49 @@ function teardown {
     # Run teardown and capture output
     run teardown_device
     assert_success
+
     assert_output --partial "Starting explicit teardown of device fixture..."
-    assert_output --partial "Unmounting ${DEVCONFIG[MOUNT_POINT]}"
-    assert_output --partial "Deactivating logical volume ${DEVCONFIG[MAPPED_LVM]}"
-    assert_output --partial "Deactivating volume group ${DEVCONFIG[VG_NAME]}"
-    assert_output --partial "Removing physical volume ${DEVCONFIG[MAPPED_DEVICE]}"
+
+    # case: MOUNT
+    assert_output --partial "Unmounting ${DEVCONFIG[MOUNT_POINT]} and wiping filesystem signatures..."
+    assert_output --partial "No blocking processes on ${DEVCONFIG[MOUNT_POINT]}"
+    refute_output --partial "Failed to unmount ${DEVCONFIG[MOUNT_POINT]}"
+    refute_output --partial "Failed to wipe filesystem signatures on ${DEVCONFIG[MOUNT_POINT]}"
+    assert_output --partial "Finished unmounting ${DEVCONFIG[MOUNT_POINT]} and wiping filesystem signatures"
+
+    # case: LVM_LV
+    assert_output --partial "Deactivating and removing logical volume ${DEVCONFIG[MAPPED_LVM]}..."
+    refute_output --partial "Failed to deactivate ${DEVCONFIG[MAPPED_LVM]}"
+    refute_output --partial "Failed to remove ${DEVCONFIG[MAPPED_LVM]}"
+    assert_output --partial "Removing device-mapper entry for ${DEVCONFIG[MAPPED_LVM]}..."
+    refute_output --partial "Failed to remove device-mapper entry for ${DEVCONFIG[MAPPED_LVM]}"
+    assert_output --partial "Removing device-mapper entry for ${DEVCONFIG[MAPPED_LVM]}..."
+    assert_output --partial "Finished deactivating and removing logical volume ${DEVCONFIG[MAPPED_LVM]}"
+
+    # case: LVM_VG
+    assert_output --partial "Deactivating and removing volume group ${DEVCONFIG[VG_NAME]}..."
+    refute_output --partial "Failed to deactivate ${DEVCONFIG[VG_NAME]}"
+    refute_output --partial "Failed to remove ${DEVCONFIG[VG_NAME]}"
+    assert_output --partial "Finished deactivating and removing volume group ${DEVCONFIG[VG_NAME]}"
+
+    # case: LVM_PV
+    assert_output --partial "Wiping and removing physical volume ${DEVCONFIG[MAPPED_DEVICE]}..."
+    refute_output --partial "Failed to remove ${DEVCONFIG[MAPPED_DEVICE]}"
+    refute_output --partial "Failed to wipe filesystem signatures on ${DEVCONFIG[MAPPED_DEVICE]}"
+    assert_output --partial "Finished wiping and removing physical volume ${DEVCONFIG[MAPPED_DEVICE]}"
+
+    # case: LUKS
     assert_output --partial "Closing LUKS container ${DEVCONFIG[MAPPED_DEVICE]}"
-    assert_output --partial "Removing loop device ${DEVCONFIG[TEST_DEVICE]}"
-    assert_output --partial "Deleting image file ${DEVCONFIG[IMG_FILE]}"
-    assert_output --partial "Teardown complete."
+    assert_output --partial "Wiping LUKS header from ${DEVCONFIG[MAPPED_DEVICE]}..."
+    refute_output --partial "Failed to wipe LUKS header on ${DEVCONFIG[MAPPED_DEVICE]}"
+    assert_output --partial "LUKS metadata successfully removed from ${DEVCONFIG[MAPPED_DEVICE]}"
+    assert_output --partial "Finished closing LUKS container ${DEVCONFIG[MAPPED_DEVICE]}"
+
+    # case: LOOPBACK
+    assert_output --partial "Resetting loop device ${DEVCONFIG[TEST_DEVICE]}..."
+    assert_output --partial "Zeroing out the start of ${DEVCONFIG[TEST_DEVICE]}"
+    refute_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} still contains LUKS metadata"
+    assert_output --partial "Loopback device ${DEVCONFIG[TEST_DEVICE]} reset to initial state"
 }
 
 #@test "teardown_device cleans up all created resources" {
