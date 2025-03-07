@@ -413,6 +413,12 @@ test_device_fixture_create_device() {
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
+create_device_coverage() {
+    collect_coverage_data test_device_fixture_create_device
+}
+
+
+
 test_bats_common_setup() {
     local source_file="${CONFIG[BASE_DIR]}/test/lib/_common_setup.bash"
     local test_file="${CONFIG[BASE_DIR]}/test/unit/test_common_setup.bats"
