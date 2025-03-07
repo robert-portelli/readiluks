@@ -1,18 +1,22 @@
 # File: _device_fixture.bash
 # Purpose: Provides functions to create and teardown a loopback device as a LUKS container.
 
-declare -gA DEVCONFIG=(
-    [TEST_DEVICE]=""  # passed to container as env var in _run-in-docker.bash
-    [LUKS_PW]="password"
-    [LUKS_LABEL]="TEST_LUKS"
-    [MAPPED_DEVICE]=""  # set by setup_luks(): /dev/mapper/LUKS_LABEL
-    [VG_NAME]="vgtest"
-    [LV_NAME]="lvtest"
-    [MAPPED_LVM]=""  # set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
-    [FS_TYPE]="btrfs"
-    [MOUNT_POINT]="/mnt/target"
-    [REG_FILE]="$(mktemp /tmp/device_fixture_registry-XXXXXX.log)"
-)
+declare -gA DEVCONFIG  # Declare the array but don't initialize it here
+
+_initialize_DEVCONFIG() {
+    DEVCONFIG[TEST_DEVICE]=""  # Passed to container as env var in _run-in-docker.bash
+    DEVCONFIG[LUKS_PW]="password"
+    DEVCONFIG[LUKS_LABEL]="TEST_LUKS"
+    DEVCONFIG[MAPPED_DEVICE]=""  # Set by setup_luks(): /dev/mapper/LUKS_LABEL
+    DEVCONFIG[VG_NAME]="vgtest"
+    DEVCONFIG[LV_NAME]="lvtest"
+    DEVCONFIG[MAPPED_LVM]=""  # Set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
+    DEVCONFIG[FS_TYPE]="btrfs"
+    DEVCONFIG[MOUNT_POINT]="/mnt/target"
+    DEVCONFIG[REG_FILE]="$(mktemp /tmp/device_fixture_registry-XXXXXX.log)"
+}
+
+_initialize_DEVCONFIG
 
 register_test_device() {
     [[ -b "$TEST_DEVICE" ]] || {
