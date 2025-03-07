@@ -247,7 +247,7 @@ test_device_fixture() {
     collect_coverage_data \
         test_device_fixture_setup_lvm \
         test_device_fixture_setup_luks \
-        test_device_fixture_create_device \
+        test_device_fixture_register_test_device \
         test_device_fixture_format_filesystem \
         test_device_fixture_teardown_device
 }
@@ -402,9 +402,9 @@ test_device_fixture_setup_luks() {
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
-test_device_fixture_create_device() {
+test_device_fixture_register_test_device() {
     local source_file="${CONFIG[BASE_DIR]}/test/local_test_runner/lib/_device_fixture.bash"
-    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture/test_create_device.bats"
+    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/test_device_fixture/test_register_test_device.bats"
     local workflow_event=""
     local workflow_job=""
 
@@ -413,8 +413,8 @@ test_device_fixture_create_device() {
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
-create_device_coverage() {
-    collect_coverage_data test_device_fixture_create_device
+register_test_device_coverage() {
+    collect_coverage_data test_device_fixture_register_test_device
 }
 
 

@@ -10,7 +10,7 @@ This project is rigorously tested using **Docker-in-Docker (DinD)** to provide a
 - 🏠 **Modular & Maintainable Codebase** → Each function has **dedicated unit tests**.
 - 💪 **Containerized Test Environment** → Ensures isolated and reproducible test runs using **Docker-in-Docker**.
 - 🧪 **Comprehensive Testing Suite** → Supports **unit, integration, and workflow testing** using **BATS**.
-- 📊 **Function-Level Testing** → Each core function (e.g., `create_device()`, `setup_luks()`) has **independent tests**.
+- 📊 **Function-Level Testing** → Each core function (e.g., `register_test_device()`, `setup_luks()`) has **independent tests**.
 - 💪 **Continuous Integration** → Designed for automation via **GitHub Actions**.
 
 ---
@@ -47,7 +47,7 @@ All tests are executed inside a Docker-in-Docker environment for isolation.
 
 ### 💮 Run a Unit Test
 ```bash
-bash test/local_test_runner/runner.bash --test test_device_fixture/test_create_device
+bash test/local_test_runner/runner.bash --test test_device_fixture/test_register_test_device
 ```
 
 ### 💮 Run All `test_device_fixture/` Tests
@@ -106,7 +106,7 @@ bash test/local_test_runner/runner.bash --test test_device_fixture/test_teardown
     │   ├── runner.bash            # Main test runner script, coordinating execution across test types
     │   └── unit
     │       └── test_device_fixture # Each function in `_device_fixture.bash` has **dedicated tests**
-    │           ├── test_create_device.bats
+    │           ├── test_register_test_device.bats
     │           ├── test_format_filesystem.bats
     │           ├── test_setup_luks.bats
     │           ├── test_setup_lvm.bats
