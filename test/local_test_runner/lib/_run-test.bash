@@ -55,6 +55,50 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
+run_coverage_analysis() {
+    local source_file="$1"
+    local test_file="$2"
+
+    # Create a temp directory for kcov
+    local kcov_dir
+    kcov_dir="$(mktemp -d)"
+
+    # Run coverage analysis inside the test container
+    run_in_docker "kcov --clean --include-path='${source_file}' \"${kcov_dir}\" bats '${test_file}' > /dev/null 2>&1"
+
+    # Verify kcov output exists before proceeding
+    if [[ -f "${kcov_dir}/bats/sonarqube.xml" ]]; then
+        # Extract uncovered lines
+        uncovered_lines=$(grep 'covered="false"' "${kcov_dir}/bats/sonarqube.xml" | sed -n 's/.*lineNumber="\([0-9]*\)".*/\1/p')
+    else
+        echo "⚠️  Warning: Coverage report missing. No coverage data available."
+        uncovered_lines=""
+    fi
+
+    # Count total statements (approximated by the last line number in the source file)
+    local total_statements
+    total_statements=$(wc -l < "${source_file}")
+
+    # Count the number of uncovered statements
+    local missed_statements
+    missed_statements=$(echo "$uncovered_lines" | wc -l)
+
+    # Calculate coverage percentage (using floating point)
+    local coverage
+    if [[ "$total_statements" -gt 0 ]]; then
+        coverage=$(awk "BEGIN {printf \"%.1f\", (100 - ($missed_statements * 100 / $total_statements))}")
+    else
+        coverage=100.0
+    fi
+
+    # Print tabular coverage output
+    printf "\n%-30s %6s %6s %6s %s\n" "Name" "Stmts" "Miss" "Cover" "Missing"
+    printf "%-30s %6d %6d %5.1f%% %s\n" "${source_file}" "${total_statements}" "${missed_statements}" "${coverage}" "${uncovered_lines:-None}"
+
+    # Cleanup temporary files
+    rm -rf "${kcov_dir}"
+}
+
 run_test() {
     local test_name="${FUNCNAME[1]}"
     local source_file="$1"
@@ -76,17 +120,16 @@ run_test() {
         run_in_docker "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
     fi
 
-    # Run kcov if --coverage was passed to local_test_runner/runner.bash
+    # Run kcov inside Docker if --coverage is enabled
     if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
         echo "📊 Running coverage analysis..."
-
-        # Run coverage analysis inside the test container
-        run_in_docker "kcov_dir=\$(mktemp -d) && \
+        local coverage_output
+        coverage_output=$(run_in_docker "kcov_dir=\$(mktemp -d) && \
                        kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' > /dev/null 2>&1 && \
-                       grep 'covered=\"false\"' \"\$kcov_dir/bats/sonarqube.xml\" | \
-                       sed -n 's/.*lineNumber=\"\([0-9]*\)\".*/📍 Line \1 uncovered/p' || \
-                       echo '✅ All lines covered.' && \
-                       rm -rf \"\$kcov_dir\""
+                       cat \"\$kcov_dir/bats/sonarqube.xml\"")
+
+        # Return the full coverage report (both covered and uncovered lines)
+        echo "$coverage_output"
     fi
 
     # Run workflow tests if --workflow was passed
