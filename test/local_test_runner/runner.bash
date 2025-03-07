@@ -69,39 +69,182 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
 }
 
-filter_uncovered_lines() {
+test_coverage_fixture_with_q1_coverage() {
+    local source_file="${CONFIG[BASE_DIR]}/test/coverage/lib/_coverage_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/coverage/unit/q1_coverage.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+
+test_coverage_fixture_with_q2_coverage() {
+    local source_file="${CONFIG[BASE_DIR]}/test/coverage/lib/_coverage_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/coverage/unit/q2_coverage.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+
+test_coverage_fixture_with_q3_coverage() {
+    local source_file="${CONFIG[BASE_DIR]}/test/coverage/lib/_coverage_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/coverage/unit/q3_coverage.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+
+test_coverage_fixture_with_q4_coverage() {
+    local source_file="${CONFIG[BASE_DIR]}/test/coverage/lib/_coverage_fixture.bash"
+    local test_file="${CONFIG[BASE_DIR]}/test/coverage/unit/q4_coverage.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+
+collect_coverage_data() {
     local test_functions=("$@")
+    local all_lines_file
+    local covered_lines_file
+    local uncovered_lines_file
+    all_lines_file="$(mktemp)"
+    covered_lines_file="$(mktemp)"
+    uncovered_lines_file="$(mktemp)"
 
-    local uncovered_tmp
-    uncovered_tmp="$(mktemp)"
+    local source_file="UNKNOWN"
 
-    #echo "📊 Running cumulative coverage analysis for: $source_file"
-
+    # Step 1: Collect all possible lines that need coverage
     for test_function in "${test_functions[@]}"; do
         echo "🔍 Running $test_function..."
+        local coverage_output
+        coverage_output="$($test_function)"
 
-        # Capture uncovered lines from the current test
-        local uncovered_output
-        uncovered_output="$($test_function)"
-
-        # If uncovered_tmp is empty, initialize it with the first uncovered output
-        if [[ ! -s "$uncovered_tmp" ]]; then
-            echo "$uncovered_output" > "$uncovered_tmp"
-        else
-            # Compare and filter uncovered lines
-            awk 'NR==FNR{a[$0]; next} !($0 in a)' "$uncovered_tmp" <(echo "$uncovered_output") > "${uncovered_tmp}.new"
-            mv "${uncovered_tmp}.new" "$uncovered_tmp"
+        # Extract source file from SonarQube XML output
+        if [[ "$source_file" == "UNKNOWN" ]]; then
+            source_file=$(echo "$coverage_output" | grep -oP '(?<=<file path=")[^"]+' | head -n 1)
+            source_file=$(basename "$source_file")  # Get only the filename
         fi
+
+        # Extract all lines needing coverage
+        echo "$coverage_output" | grep 'lineNumber="' | awk -F'"' '{print $2}' >> "$all_lines_file"
     done
 
-    # Final uncovered lines output
-    echo "📊 Final uncovered lines after all tests:"
-    cat "$uncovered_tmp"
-    rm -f "$uncovered_tmp"
+    # Remove duplicates to get the full set of covered lines
+    sort -u "$all_lines_file" -o "$all_lines_file"
+
+    # Step 2: Collect covered lines from each test
+    for test_function in "${test_functions[@]}"; do
+        echo "📢 Processing results from: $test_function..."
+        local coverage_output
+        coverage_output="$($test_function)"
+        echo "$coverage_output" | grep 'covered="true"' | awk -F'"' '{print $2}' >> "$covered_lines_file"
+    done
+
+    # Remove covered lines from the full list
+    sort -u "$covered_lines_file" -o "$covered_lines_file"
+    comm -23 "$all_lines_file" "$covered_lines_file" > "$uncovered_lines_file"
+
+    # Step 3: Format and print the final coverage report
+    format_coverage_report "$source_file" "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
+
+    # Cleanup
+    rm -f "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
+}
+
+
+format_missing_lines() {
+    # shellcheck disable=SC2207
+    local sorted_lines=($(echo "$1" | tr ',' '\n' | sort -n | uniq))
+    local formatted=""
+    local start=-1
+    local prev=-1
+
+    for line in "${sorted_lines[@]}"; do
+        if [[ $start -eq -1 ]]; then
+            start=$line
+        elif [[ $((prev + 1)) -ne $line ]]; then
+            if [[ $start -eq $prev ]]; then
+                formatted+="${start},"
+            else
+                formatted+="${start}-${prev},"
+            fi
+            start=$line
+        fi
+        prev=$line
+    done
+
+    if [[ $start -eq $prev ]]; then
+        formatted+="${start}"
+    else
+        formatted+="${start}-${prev}"
+    fi
+
+    echo "$formatted"
+}
+
+format_coverage_report() {
+    local source_file="$1"
+    local all_lines_file="$2"
+    local covered_lines_file="$3"
+    local uncovered_lines_file="$4"
+    local report_tmp
+    report_tmp="$(mktemp)"
+
+    # Compute statistics
+    local total_statements
+    total_statements=$(wc -l < "$all_lines_file")
+
+    local missed_statements
+    missed_statements=$(wc -l < "$uncovered_lines_file")
+
+    local coverage
+    if [[ "$total_statements" -gt 0 ]]; then
+        coverage=$((100 - (missed_statements * 100 / total_statements)))
+    else
+        coverage=100
+    fi
+
+    # Format missing lines
+    local missing_lines
+    # shellcheck disable=SC2002
+    missing_lines=$(format_missing_lines "$(cat "$uncovered_lines_file" | tr '\n' ',' | sed 's/,$//')")
+
+    # Store report
+    printf "%-30s %6d %6d %5d%% %s\n" \
+        "$source_file" "$total_statements" "$missed_statements" "$coverage" \
+        "${missing_lines:-None}" >> "$report_tmp"
+
+    # Print report
+    echo -e "\n📊 Final Coverage Report:\n"
+    printf "%-30s %6s %6s %6s %s\n" "Name" "Stmts" "Miss" "Cover" "Missing"
+    printf "%-30s %6s %6s %6s %s\n" "------------------------------" "------" "------" "------" "----------------"
+    cat "$report_tmp"
+    printf "%-30s %6s %6s %6s %s\n" "------------------------------" "------" "------" "------" "----------------"
+
+    rm -f "$report_tmp"
+}
+
+test_coverage_fixture() {
+    collect_coverage_data \
+        test_coverage_fixture_with_q1_coverage \
+        test_coverage_fixture_with_q2_coverage \
+        test_coverage_fixture_with_q3_coverage
+
 }
 
 test_device_fixture() {
-    filter_uncovered_lines \
+    collect_coverage_data \
         test_device_fixture_setup_lvm \
         test_device_fixture_setup_luks \
         test_device_fixture_create_device \
@@ -209,8 +352,6 @@ manual_nested_container() {
     # this is manual debugging test
     docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
         --privileged --user root \
-        --cap-add=MKNOD \
-        --device=/dev/loop-control \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -w "/workspace" \
         "${CONFIG[IMAGENAME]}" bash
