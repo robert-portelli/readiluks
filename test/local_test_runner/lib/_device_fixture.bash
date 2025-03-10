@@ -84,22 +84,42 @@ setup_lvm() {
     pvcreate "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create PV"; return 1; }
 
     # Create volume group (VG)
-    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}" || { echo "Failed to create VG"; return 1; }
+    vgcreate "${DEVCONFIG[VG_NAME]}" "${DEVCONFIG[MAPPED_DEVICE]}" || {
+        echo "Failed to create VG"
+        pvremove -ff -y "${DEVCONFIG[MAPPED_DEVICE]}"
+        return 1
+    }
 
     # Create logical volume (LV)
     lvcreate -l 100%FREE \
         -n "${DEVCONFIG[LV_NAME]}" \
         "${DEVCONFIG[VG_NAME]}" \
-        --zero n || { echo "Failed to create LV"; return 1; }
+        --zero n || {
+        echo "Failed to create LV"
+        vgremove -f "${DEVCONFIG[VG_NAME]}"
+        pvremove -ff -y "${DEVCONFIG[MAPPED_DEVICE]}"
+        return 1
+    }
 
     DEVCONFIG[MAPPED_LVM]="/dev/mapper/${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}"
 
     # Ensure volume group is active
-    vgchange -ay "${DEVCONFIG[VG_NAME]}" || { echo "Failed to activate VG"; return 1; }
+    vgchange -ay "${DEVCONFIG[VG_NAME]}" || {
+        echo "Failed to activate VG"
+        lvremove -f "${DEVCONFIG[MAPPED_LVM]}"
+        vgremove -f "${DEVCONFIG[VG_NAME]}"
+        pvremove -ff -y "${DEVCONFIG[MAPPED_DEVICE]}"
+        return 1
+    }
 
     # Explicitly activate the logical volume
-    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}" || { echo "Failed to activate LV"; return 1; }
-
+    lvchange -ay "${DEVCONFIG[MAPPED_LVM]}" || {
+        echo "Failed to activate LV"
+        lvremove -f "${DEVCONFIG[MAPPED_LVM]}"
+        vgremove -f "${DEVCONFIG[VG_NAME]}"
+        pvremove -ff -y "${DEVCONFIG[MAPPED_DEVICE]}"
+        return 1
+    }
     # Trigger udev to create device nodes
     udevadm trigger
     udevadm settle
@@ -110,8 +130,15 @@ setup_lvm() {
 
         # Get dynamic major/minor numbers
         dm_info=$(dmsetup info "${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}" | awk '/Major, minor:/ {print $3, $4}' | tr -d ',')
+
         if [[ -z "$dm_info" ]]; then
             echo "Failed to retrieve major/minor numbers for ${DEVCONFIG[MAPPED_LVM]}"
+
+            # CLEANUP because we failed
+            lvremove -f "${DEVCONFIG[MAPPED_LVM]}"
+            vgremove -f "${DEVCONFIG[VG_NAME]}"
+            pvremove -ff -y "${DEVCONFIG[MAPPED_DEVICE]}"
+
             return 1
         fi
         read -r major minor <<< "$dm_info"
@@ -160,6 +187,26 @@ format_filesystem() {
     echo "MOUNT ${DEVCONFIG[MOUNT_POINT]}" >> "${DEVCONFIG[REG_FILE]}"
 }
 
+wait_for_removal() {
+    local check_command="$1"
+    local description="$2"
+    local max_attempts="${3:-10}"  # default 10 attempts
+    local sleep_interval="${4:-0.5}" # default 0.5s between checks
+    local fail_message="${5:-"Timeout while waiting for $description to be removed."}"
+
+    local attempts_remaining="$max_attempts"
+
+    while eval "$check_command"; do
+        echo "Waiting for $description to be removed... (Attempts remaining: $attempts_remaining)" >&2
+        sleep "$sleep_interval"
+
+        (( attempts_remaining-- ))
+        if (( attempts_remaining <= 0 )); then
+            echo "ERROR: $fail_message" >&2
+            return 1
+        fi
+    done
+}
 
 teardown_device() {
     if [[ ! -f "${DEVCONFIG[REG_FILE]}" ]]; then
@@ -195,19 +242,9 @@ teardown_device() {
                             echo "No blocking processes on $value" >&2
                         fi
                         umount -l "$value" || echo "Failed to unmount $value" >&2
-                        attempts_remaining=4
+                        wait_for_removal "mountpoint -q '$value'" "$value to unmount" \
+                            4 0.5 "Timeout waiting for $value to unmount."
 
-                        while mountpoint -q "$value"; do
-                            echo "Waiting for $value to unmount... (Attempts remaining: $attempts_remaining)" >&2
-                            sleep 0.5
-
-                            (( attempts_remaining-- ))
-
-                            if (( attempts_remaining <= 0 )); then
-                                echo "ERROR: Timeout waiting for $value to unmount." >&2
-                                return 1
-                            fi
-                        done
                         rm -rf "$value" || echo "Failed to remove mount point $value" >&2
                         wipefs -a "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to wipe filesystem signatures on $value" >&2
 
@@ -218,20 +255,14 @@ teardown_device() {
                         echo "Deactivating and removing logical volume $value..." >&2
                         lvchange -an "$value" || echo "Failed to deactivate $value" >&2
                         lvremove -f "$value" || echo "Failed to remove $value" >&2
-                        while lvs "$value" &>/dev/null; do
-                            echo "Waiting for logical volume $value to be removed..." >&2
-                            sleep 0.5
-                        done
+                        wait_for_removal "lvs '$value' &>/dev/null" "logical volume $value" \
+                            4 0.5 "Timeout waiting for logical volume $value to be removed."
 
                         # Ensure device-mapper entry is fully removed
                         echo "Removing device-mapper entry for ${DEVCONFIG[MAPPED_LVM]}..." >&2
                         dmsetup remove "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to remove device-mapper entry" >&2
-
-                        # Wait until the device is no longer listed
-                        while dmsetup info "${DEVCONFIG[MAPPED_LVM]}" &>/dev/null; do
-                            echo "Waiting for dmsetup to fully remove ${DEVCONFIG[MAPPED_LVM]}..." >&2
-                            sleep 0.5
-                        done
+                        wait_for_removal "dmsetup info '${DEVCONFIG[MAPPED_LVM]}' &>/dev/null" "device-mapper entry ${DEVCONFIG[MAPPED_LVM]}" \
+                            4 0.5 "Timeout waiting for dmsetup to fully remove ${DEVCONFIG[MAPPED_LVM]}"
 
                         sync && udevadm settle
                         echo "Finished deactivating and removing logical volume $value" >&2
@@ -240,10 +271,9 @@ teardown_device() {
                         echo "Deactivating and removing volume group $value..." >&2
                         vgchange -an "$value" || echo "Failed to deactivate $value" >&2
                         vgremove -f "$value" || echo "Failed to remove $value" >&2
-                        while vgs "$value" &>/dev/null; do
-                            echo "Waiting for volume group $value to be removed..." >&2
-                            sleep 0.5
-                        done
+                        wait_for_removal "vgs '$value' &>/dev/null" "volume group $value" \
+                            4 0.5 "Timeout waiting for volume group $value to be removed."
+
                         udevadm settle
                         echo "Finished deactivating and removing volume group $value" >&2
                         ;;
@@ -252,25 +282,17 @@ teardown_device() {
                         echo "Wiping and removing physical volume $value..." >&2
                         pvremove -ff -y "$value" || echo "Failed to remove $value" >&2
                         wipefs -a "$value" || echo "Failed to wipe filesystem signatures on $value" >&2
-                        while pvs "$value" &>/dev/null; do
-                            echo "Waiting for physical volume $value to be removed..." >&2
-                            sleep 0.5
-                        done
+                        wait_for_removal "pvs '$value' &>/dev/null" "physical volume $value" \
+                            4 0.5 "Timeout waiting for physical volume $value to be removed."
+
                         udevadm settle
                         echo "Finished wiping and removing physical volume $value" >&2
                         ;;
                     LUKS)
                         echo "Closing LUKS container $value..." >&2
 
-                        timeout=10
-                        while ! cryptsetup close "$value" && (( timeout-- > 0 )); do
-                            echo "Waiting for LUKS container $value to close..." >&2
-                            sleep 0.5
-                        done
-                        if (( timeout == 0 )); then
-                            echo "ERROR: Timeout while closing LUKS container $value" >&2
-                            return 1
-                        fi
+                        wait_for_removal "! cryptsetup close '$value'" "LUKS container $value to close" \
+                            10 0.5 "Timeout waiting for LUKS container $value to close."
 
                         # Overwrite the LUKS header to remove LUKS metadata
                         echo "Erasing LUKS header from $value..." >&2
