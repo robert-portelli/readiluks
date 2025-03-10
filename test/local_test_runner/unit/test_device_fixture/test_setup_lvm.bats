@@ -12,6 +12,30 @@ function teardown {
     teardown_device
 }
 
+
+@test "setup_lvm fails when LV_NAME already exists" {
+    # Create a temporary directory for our mock binaries
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `lvs` to return an error (simulate LV already existing)
+    cat <<'EOF' > "$MOCK_BIN_DIR/lvs"
+#!/usr/bin/env bash
+echo "  Logical volume \"${DEVCONFIG[LV_NAME]}\" already exists." >&2
+exit 0  # Simulate success so the check in setup_lvm() passes
+EOF
+    chmod +x "$MOCK_BIN_DIR/lvs"
+
+    # Run setup_lvm with the mocked `lvs`
+    run setup_lvm
+    assert_failure
+    assert_output --partial "ERROR: Logical volume ${DEVCONFIG[MAPPED_LVM]} already exists."
+
+    # Cleanup: remove the mock after the test
+    rm -rf "$MOCK_BIN_DIR"
+}
+
+
 @test "BATS smoke test AND setup_lvm produces correct mutations" {
     # save on creating luks by smoke testing here
     run true
@@ -75,6 +99,7 @@ function teardown {
     run setup_lvm
     assert_success
     assert_output --partial "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}"
+    refute_output --partial "Failed to retrieve major/minor numbers for ${DEVCONFIG[MAPPED_LVM]}"
 }
 
 @test "setup_lvm() fails when MAPPED_DEVICE is not a valid block device" {
