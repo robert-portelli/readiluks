@@ -1,4 +1,5 @@
-# shellcheck disable=SC2119
+# shellcheck disable=SC2119,SC2030,SC2031
+
 
 function setup {
     load '../../../lib/_common_setup'
@@ -19,6 +20,22 @@ function teardown {
     assert [ -d "/tmp/test" ]
     refute [ -f "/tmp/test" ]
     rm -d /tmp/test
+}
+
+@test "setup_luks fails when TEST_DEVICE is not a block device" {
+    DEVCONFIG[TEST_DEVICE]="/dev/nonexistent"
+    run setup_luks
+    assert_failure
+    assert_output --partial "ERROR: /dev/nonexistent is not a valid block device."
+}
+
+@test "setup_luks fails when TEST_DEVICE is already a LUKS container" {
+    run setup_luks
+    assert_success  # First call should succeed
+
+    run setup_luks
+    assert_failure  # Second call should detect an existing LUKS container
+    assert_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} is already a LUKS container."
 }
 
 @test "DEVCONFIG and REG_FILE have been correctly prepared for setup_luks()" {
