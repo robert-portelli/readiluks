@@ -14,7 +14,8 @@ function teardown {
     teardown_device
 }
 
-@test "BATS smoke test AND teardown_device produces correct output" {
+
+@test "BATS smoke test" {
     run true
     assert_success
     mkdir '/tmp/test'
@@ -22,7 +23,26 @@ function teardown {
     assert [ -d "/tmp/test" ]
     refute [ -f "/tmp/test" ]
     rm -d /tmp/test
+}
 
+
+
+
+
+@test "teardown_device case: MOUNT detects and kills processes using a mount" {
+    # Create a dummy file inside the mount
+    echo "Blocking device" > "${DEVCONFIG[MOUNT_POINT]}/dummyfile"
+
+    # Start a background process that keeps the mount busy
+    tail -f "${DEVCONFIG[MOUNT_POINT]}/dummyfile" >/dev/null 2>&1 &
+
+    run teardown_device
+    # Ensure `teardown_device()` detects and kills the process
+    assert_success
+    assert_output --partial "Killing processes using ${DEVCONFIG[MOUNT_POINT]}..."
+}
+
+@test "teardown_device produces correct output" {
     # Run teardown and capture output
     run teardown_device
     assert_success
@@ -59,7 +79,7 @@ function teardown {
 
     # case: LUKS
     assert_output --partial "Closing LUKS container ${DEVCONFIG[MAPPED_DEVICE]}"
-    assert_output --partial "Wiping LUKS header from ${DEVCONFIG[MAPPED_DEVICE]}..."
+    assert_output --partial "Erasing LUKS header from ${DEVCONFIG[MAPPED_DEVICE]}..."
     refute_output --partial "Failed to wipe LUKS header on ${DEVCONFIG[MAPPED_DEVICE]}"
     assert_output --partial "LUKS metadata successfully removed from ${DEVCONFIG[MAPPED_DEVICE]}"
     assert_output --partial "Finished closing LUKS container ${DEVCONFIG[MAPPED_DEVICE]}"
