@@ -1,4 +1,4 @@
-# shellcheck disable=SC2119
+# shellcheck disable=SC2119,SC2030,SC2031
 
 function setup {
     load '../../../lib/_common_setup'
@@ -13,8 +13,55 @@ function teardown {
     teardown_device
 }
 
-@test "Smoke test, DEVCONFIG validation, and format_filesystem mutations" {
-    # 🚦 Smoke Test
+@test "format_filesystem fails if LVM is not setup" {
+    DEVCONFIG[MAPPED_LVM]=""
+    run format_filesystem
+    assert_failure
+    assert_output -p "Error: No LVM volume found. Cannot format filesystem."
+}
+
+@test "format_filesystem fails if unsupported filesystem type passed" {
+    DEVCONFIG[FS_TYPE]=""
+    run format_filesystem
+    assert_failure
+    assert_output -p "Failed to format ${DEVCONFIG[MAPPED_LVM]} as ${DEVCONFIG[FS_TYPE]}"
+}
+
+@test "format_filesystem() fails if mountpoint creation fails" {
+    DEVCONFIG[MOUNT_POINT]="/dev/null/invalid"
+    run format_filesystem
+    assert_failure
+    assert_output -p "Failed to create mountpoint: ${DEVCONFIG[MOUNT_POINT]}"
+}
+
+@test "format_filesystem fails when mount fails" {
+    # Create a temporary directory for our mock binaries
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `mount` to always fail
+    cat <<'EOF' > "$MOCK_BIN_DIR/mount"
+#!/usr/bin/env bash
+echo "mount: failed to mount $2 on $3" >&2
+exit 1  # Simulate mount failure
+EOF
+    chmod +x "$MOCK_BIN_DIR/mount"
+
+    # Ensure `DEVCONFIG[MAPPED_LVM]` is set to prevent early failures
+    #DEVCONFIG[MAPPED_LVM]="/dev/mapper/${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}"
+
+    # Run `format_filesystem()` expecting failure
+    run format_filesystem
+    assert_failure
+    assert_output --partial "Failed to mount ${DEVCONFIG[MAPPED_LVM]} at ${DEVCONFIG[MOUNT_POINT]}"
+
+    # Cleanup: remove the mock
+    rm -rf "$MOCK_BIN_DIR"
+}
+
+
+
+@test "Smoke test BATS setup" {
     run true
     assert_success
 
@@ -24,8 +71,9 @@ function teardown {
     assert [ -d "/tmp/test" ]
     refute [ -f "/tmp/test" ]
     rm -d /tmp/test
+}
 
-    # 🎯 Expected configuration values
+@test "DEVCONFIG was correctly prepared for format_filesystem()" {
     declare -A expected_config=(
         [TEST_DEVICE]="$TEST_DEVICE"
         [LUKS_PW]="password"
@@ -55,7 +103,9 @@ function teardown {
     assert_output --partial "LVM_PV ${DEVCONFIG[MAPPED_DEVICE]}"
     assert_output --partial "LVM_VG ${DEVCONFIG[VG_NAME]}"
     assert_output --partial "LVM_LV ${DEVCONFIG[MAPPED_LVM]}"
+}
 
+@test "format_filesystem() produces correct output" {
     # 💾 Run format_filesystem and validate output
     run format_filesystem
     assert_success
@@ -63,6 +113,7 @@ function teardown {
     assert_output --partial "Success: ${DEVCONFIG[MAPPED_LVM]} formatted as ${DEVCONFIG[FS_TYPE]}"
     assert_output --partial "Success: mount point created at ${DEVCONFIG[MOUNT_POINT]}"
     assert_output --partial "Success: ${DEVCONFIG[MOUNT_POINT]} mounted at ${DEVCONFIG[MAPPED_LVM]} as ${DEVCONFIG[FS_TYPE]}"
+    refute_output --partial "Error: No LVM volume found. Cannot format filesystem."
 
     # 📦 Validate DEVCONFIG[MOUNT_POINT] assignment
     assert_equal "${DEVCONFIG[MOUNT_POINT]}" "/mnt/target"
@@ -97,17 +148,6 @@ function teardown {
     # Verify file persistence after remount
     run stat "$test_file"
     assert_success
-}
-
-
-@test "format_filesystem() produces correct output" {
-    # test format_filesystem
-    run format_filesystem
-    assert_success
-    refute_output --partial "Error: No LVM volume found. Cannot format filesystem."
-    assert_output --partial "Success: ${DEVCONFIG[MAPPED_LVM]} formatted as ${DEVCONFIG[FS_TYPE]}"
-    assert_output --partial "Success: mount point created at ${DEVCONFIG[MOUNT_POINT]}"
-    assert_output --partial "Success: ${DEVCONFIG[MOUNT_POINT]} mounted at ${DEVCONFIG[MAPPED_LVM]} as ${DEVCONFIG[FS_TYPE]}"
 }
 
 @test "format_filesystem performs correct operations and validates teardown" {
