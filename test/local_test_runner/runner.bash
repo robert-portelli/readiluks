@@ -245,9 +245,9 @@ test_coverage_fixture() {
 
 test_device_fixture() {
     collect_coverage_data \
-        test_device_fixture_setup_lvm \
-        test_device_fixture_setup_luks \
         test_device_fixture_register_test_device \
+        test_device_fixture_setup_luks \
+        test_device_fixture_setup_lvm \
         test_device_fixture_format_filesystem \
         test_device_fixture_teardown_device
 }
