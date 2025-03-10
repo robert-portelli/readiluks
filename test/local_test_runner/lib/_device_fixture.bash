@@ -1,18 +1,22 @@
 # File: _device_fixture.bash
 # Purpose: Provides functions to create and teardown a loopback device as a LUKS container.
 
-declare -gA DEVCONFIG=(
-    [TEST_DEVICE]=""  # passed to container as env var in _run-in-docker.bash
-    [LUKS_PW]="password"
-    [LUKS_LABEL]="TEST_LUKS"
-    [MAPPED_DEVICE]=""  # set by setup_luks(): /dev/mapper/LUKS_LABEL
-    [VG_NAME]="vgtest"
-    [LV_NAME]="lvtest"
-    [MAPPED_LVM]=""  # set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
-    [FS_TYPE]="btrfs"
-    [MOUNT_POINT]="/mnt/target"
-    [REG_FILE]="$(mktemp /tmp/device_fixture_registry-XXXXXX.log)"
-)
+declare -gA DEVCONFIG  # Declare the array but don't initialize it here
+
+_initialize_DEVCONFIG() {
+    DEVCONFIG[TEST_DEVICE]=""  # Passed to container as env var in _run-in-docker.bash
+    DEVCONFIG[LUKS_PW]="password"
+    DEVCONFIG[LUKS_LABEL]="TEST_LUKS"
+    DEVCONFIG[MAPPED_DEVICE]=""  # Set by setup_luks(): /dev/mapper/LUKS_LABEL
+    DEVCONFIG[VG_NAME]="vgtest"
+    DEVCONFIG[LV_NAME]="lvtest"
+    DEVCONFIG[MAPPED_LVM]=""  # Set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
+    DEVCONFIG[FS_TYPE]="btrfs"
+    DEVCONFIG[MOUNT_POINT]="/mnt/target"
+    DEVCONFIG[REG_FILE]="$(mktemp /tmp/device_fixture_registry-XXXXXX.log)"
+}
+
+_initialize_DEVCONFIG
 
 register_test_device() {
     [[ -b "$TEST_DEVICE" ]] || {
@@ -27,6 +31,7 @@ register_test_device() {
 
 
 setup_luks() {
+
     [[ -b "${DEVCONFIG[TEST_DEVICE]}" ]] || {
         echo "ERROR: ${DEVCONFIG[TEST_DEVICE]} is not a valid block device." >&2
         return 1
@@ -37,17 +42,15 @@ setup_luks() {
         return 1
     fi
 
-    if cryptsetup status "${DEVCONFIG[LUKS_LABEL]}" &>/dev/null; then
-        echo "ERROR: ${DEVCONFIG[LUKS_LABEL]} is already mapped at /dev/mapper/${DEVCONFIG[LUKS_LABEL]}" >&2
-        return 1
-    fi
+    # Store password in a temporary file to avoid using a pipe
+    echo -n "${DEVCONFIG[LUKS_PW]}" > /tmp/luks-pw.tmp
 
-    echo -n "${DEVCONFIG[LUKS_PW]}" | \
-        cryptsetup luksFormat \
-            --type luks2 -s 256 -h sha512 \
-            --label "${DEVCONFIG[LUKS_LABEL]}" \
-            --batch-mode \
-            "${DEVCONFIG[TEST_DEVICE]}" || return 1
+    cryptsetup luksFormat \
+        --type luks2 -s 256 -h sha512 \
+        --label "${DEVCONFIG[LUKS_LABEL]}" \
+        --batch-mode "${DEVCONFIG[TEST_DEVICE]}" < /tmp/luks-pw.tmp || return 1
+
+    rm -f /tmp/luks-pw.tmp
 
     echo -n "${DEVCONFIG[LUKS_PW]}" | \
         cryptsetup open "${DEVCONFIG[TEST_DEVICE]}" "${DEVCONFIG[LUKS_LABEL]}" || return 1
@@ -118,11 +121,10 @@ setup_lvm() {
     fi
 
     # Append LVM information to the registry file
-    {
-        echo "LVM_PV ${DEVCONFIG[MAPPED_DEVICE]}"
-        echo "LVM_VG ${DEVCONFIG[VG_NAME]}"
-        echo "LVM_LV ${DEVCONFIG[MAPPED_LVM]}"
-    } >> "${DEVCONFIG[REG_FILE]}"
+    # shellcheck disable=SC2129
+    echo "LVM_PV ${DEVCONFIG[MAPPED_DEVICE]}" >> "${DEVCONFIG[REG_FILE]}"
+    echo "LVM_VG ${DEVCONFIG[VG_NAME]}" >> "${DEVCONFIG[REG_FILE]}"
+    echo "LVM_LV ${DEVCONFIG[MAPPED_LVM]}" >> "${DEVCONFIG[REG_FILE]}"
 
     echo "LVM setup complete: ${DEVCONFIG[MAPPED_LVM]}"
 }
@@ -193,12 +195,21 @@ teardown_device() {
                             echo "No blocking processes on $value" >&2
                         fi
                         umount -l "$value" || echo "Failed to unmount $value" >&2
+                        attempts_remaining=4
+
                         while mountpoint -q "$value"; do
-                            echo "Waiting for $value to unmount..." >&2
+                            echo "Waiting for $value to unmount... (Attempts remaining: $attempts_remaining)" >&2
                             sleep 0.5
+
+                            (( attempts_remaining-- ))
+
+                            if (( attempts_remaining <= 0 )); then
+                                echo "ERROR: Timeout waiting for $value to unmount." >&2
+                                return 1
+                            fi
                         done
                         rm -rf "$value" || echo "Failed to remove mount point $value" >&2
-                        wipefs -a "${DEVCONFIG[MAPPED_LVM]}" || "Failed to wipe filesystem signatures on $value" >&2
+                        wipefs -a "${DEVCONFIG[MAPPED_LVM]}" || echo "Failed to wipe filesystem signatures on $value" >&2
 
                         udevadm settle
                         echo "Finished unmounting $value and wiping filesystem signatures" >&2
@@ -251,30 +262,29 @@ teardown_device() {
                     LUKS)
                         echo "Closing LUKS container $value..." >&2
 
-                        # Close the LUKS container with a retry loop
-                        while ! cryptsetup close "$value"; do
+                        timeout=10
+                        while ! cryptsetup close "$value" && (( timeout-- > 0 )); do
                             echo "Waiting for LUKS container $value to close..." >&2
                             sleep 0.5
                         done
-                        udevadm settle
+                        if (( timeout == 0 )); then
+                            echo "ERROR: Timeout while closing LUKS container $value" >&2
+                            return 1
+                        fi
 
                         # Overwrite the LUKS header to remove LUKS metadata
-                        echo "Wiping LUKS header from $value..." >&2
+                        echo "Erasing LUKS header from $value..." >&2
 
-                        # TODO: doesn't cryptsetup have a function for this?
-                        dd if=/dev/zero of="${DEVCONFIG[TEST_DEVICE]}" bs=1M count=10 status=none || {
-                            echo "Failed to wipe LUKS header on $value" >&2
-                        }
+                        cryptsetup erase "$value" || echo "Failed to erase LUKS metadata on $value" >&2
 
                         # Verify that the device is no longer a LUKS container
-                        if cryptsetup isLuks "${DEVCONFIG[TEST_DEVICE]}"; then
+                        if cryptsetup isLuks "$value"; then
                             echo "ERROR: $value is still a LUKS container after wipe." >&2
                             return 1
                         else
                             echo "LUKS metadata successfully removed from $value." >&2
                         fi
 
-                        sync && sleep 1
                         echo "Finished closing LUKS container $value" >&2
                         ;;
                     LOOPBACK)
@@ -295,6 +305,7 @@ teardown_device() {
                         udevadm settle
 
                         # Final validation that the device is "clean"
+                        echo "Ensuring test device is clean" >&2
                         if blkid "$value" &>/dev/null || cryptsetup isLuks "$value"; then
                             echo "ERROR: $value still contains data or LUKS metadata after reset." >&2
                             return 1
