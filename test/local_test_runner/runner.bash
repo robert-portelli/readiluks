@@ -113,6 +113,27 @@ test_coverage_fixture_with_q4_coverage() {
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
 }
 
+print_timing_line() {
+    local label="$1"  # e.g. "✅ test_device_fixture_setup_luks completed in:"
+    local time="$2"   # e.g. "50.673"
+
+    local total_width=88  # Target column where 's' ends (tweak this number as needed)
+    local label_length=${#label}
+    local time_length=${#time}
+
+    local spaces=$((total_width - label_length - time_length - 1))  # 1 for 's'
+
+    # Safety check to prevent negative spacing
+    [[ $spaces -lt 1 ]] && spaces=1
+
+    # Build the padding
+    local padding
+    padding=$(printf '%*s' "$spaces" "")
+
+    # Print the result
+    printf "%s%s%s\n" "$label" "$padding" "$time"s
+}
+
 collect_coverage_data() {
     local test_functions=("$@")
     local all_lines_file
@@ -124,43 +145,67 @@ collect_coverage_data() {
 
     local source_file="UNKNOWN"
 
-    # Step 1: Collect all possible lines that need coverage
+    # Start the total timer
+    local start_total
+    start_total=$(date +%s%3N)
+
+    #echo -e "\nCoverage Report:\n"
+
+    # Step 1: Collect coverage output and data per test (single run!)
     for test_function in "${test_functions[@]}"; do
         echo "🔍 Running $test_function..."
+
+        local start_time
+        start_time=$(date +%s%3N)
+
         local coverage_output
         coverage_output="$($test_function)"
 
-        # Extract source file from SonarQube XML output
+        local end_time
+        end_time=$(date +%s%3N)
+        local elapsed_ms
+        elapsed_ms=$((end_time - start_time))
+        local elapsed_sec
+        elapsed_sec="$((elapsed_ms / 1000)).$(printf "%03d" $((elapsed_ms % 1000)))"
+
+        print_timing_line "✅ $test_function completed in:" "$elapsed_sec"
+
+        # Extract source file if not already done
         if [[ "$source_file" == "UNKNOWN" ]]; then
             source_file=$(echo "$coverage_output" | grep -oP '(?<=<file path=")[^"]+' | head -n 1)
-            source_file=$(basename "$source_file")  # Get only the filename
+            source_file=$(basename "$source_file")
         fi
 
-        # Extract all lines needing coverage
+        # Collect all lines needing coverage
         echo "$coverage_output" | grep 'lineNumber="' | awk -F'"' '{print $2}' >> "$all_lines_file"
-    done
 
-    # Remove duplicates to get the full set of covered lines
-    sort -u "$all_lines_file" -o "$all_lines_file"
-
-    # Step 2: Collect covered lines from each test
-    for test_function in "${test_functions[@]}"; do
-        echo "📢 Processing results from: $test_function..."
-        local coverage_output
-        coverage_output="$($test_function)"
+        # Collect covered lines
         echo "$coverage_output" | grep 'covered="true"' | awk -F'"' '{print $2}' >> "$covered_lines_file"
     done
 
-    # Remove covered lines from the full list
+    # Remove duplicates
+    sort -u "$all_lines_file" -o "$all_lines_file"
     sort -u "$covered_lines_file" -o "$covered_lines_file"
+
+    # Compute uncovered lines
     comm -23 "$all_lines_file" "$covered_lines_file" > "$uncovered_lines_file"
 
-    # Step 3: Format and print the final coverage report
+    # End the total timer
+    local end_total
+    end_total=$(date +%s%3N)
+    local total_elapsed_ms
+    total_elapsed_ms=$((end_total - start_total))
+    local total_elapsed_sec
+     total_elapsed_sec="$((total_elapsed_ms / 1000)).$(printf "%03d" $((total_elapsed_ms % 1000)))"
+
+    echo ""
+    print_timing_line "⏱️  Total Runtime:" "$total_elapsed_sec"
+
     format_coverage_report "$source_file" "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
 
-    # Cleanup
     rm -f "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
 }
+
 
 
 format_missing_lines() {
@@ -193,6 +238,17 @@ format_missing_lines() {
     echo "$formatted"
 }
 
+calculate_coverage() {
+    local missed="$1"
+    local total="$2"
+    awk -v missed="$missed" -v total="$total" 'BEGIN {
+        if (total > 0)
+            printf "%.2f", 100 - (missed * 100 / total);
+        else
+            printf "100.00";
+    }'
+}
+
 format_coverage_report() {
     local source_file="$1"
     local all_lines_file="$2"
@@ -210,18 +266,17 @@ format_coverage_report() {
 
     local coverage
     if [[ "$total_statements" -gt 0 ]]; then
-        coverage=$((100 - (missed_statements * 100 / total_statements)))
+        coverage=$(calculate_coverage "$missed_statements" "$total_statements")
     else
-        coverage=100
+        coverage="100"
     fi
 
     # Format missing lines
     local missing_lines
-    # shellcheck disable=SC2002
-    missing_lines=$(format_missing_lines "$(cat "$uncovered_lines_file" | tr '\n' ',' | sed 's/,$//')")
+    missing_lines=$(format_missing_lines "$(tr '\n' ',' < "$uncovered_lines_file" | sed 's/,$//')")
 
     # Store report
-    printf "%-30s %6d %6d %5d%% %s\n" \
+    printf "%-30s %6d %6d %6.2f%% %s\n" \
         "$source_file" "$total_statements" "$missed_statements" "$coverage" \
         "${missing_lines:-None}" >> "$report_tmp"
 
@@ -234,6 +289,7 @@ format_coverage_report() {
 
     rm -f "$report_tmp"
 }
+
 
 test_coverage_fixture() {
     collect_coverage_data \
@@ -250,6 +306,7 @@ test_device_fixture() {
         test_device_fixture_setup_lvm \
         test_device_fixture_format_filesystem \
         test_device_fixture_teardown_device
+
 }
 
 

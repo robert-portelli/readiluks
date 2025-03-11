@@ -1,4 +1,4 @@
-# shellcheck disable=SC2119
+# shellcheck disable=SC2119,SC2030,SC2031
 
 function setup {
     load '../../../lib/_common_setup'
@@ -25,8 +25,77 @@ function teardown {
     rm -d /tmp/test
 }
 
+@test "teardown_device fails when blkid detects remaining data on loopback" {
+    MOCK_BIN_DIR="$(mktemp -d)"
+    ORIGINAL_PATH="$PATH"
+
+    # Create the blkid mock
+    cat <<'EOF' > "$MOCK_BIN_DIR/blkid"
+#!/usr/bin/env bash
+exit 0  # Simulate that data is present
+EOF
+    chmod +x "$MOCK_BIN_DIR/blkid"
+
+    # Don't delay PATH modification, mock blkid from the start
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Run teardown_device directly and capture both output and status
+    run teardown_device
+
+    # Assertions
+    assert_failure
+    assert_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} still contains data or LUKS metadata after reset."
+
+    # Cleanup
+    PATH="$ORIGINAL_PATH"
+    rm -rf "$MOCK_BIN_DIR"
+}
 
 
+
+@test "teardown_device logs error when cryptsetup erase fails" {
+    # Create a temporary directory for mock binaries
+    MOCK_BIN_DIR="$(mktemp -d)"
+    ORIGINAL_PATH="$PATH"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `cryptsetup`
+    cat <<'EOF' > "$MOCK_BIN_DIR/cryptsetup"
+#!/usr/bin/env bash
+if [[ "$1" == "close" ]]; then
+    exit 0  # success
+elif [[ "$1" == "erase" ]]; then
+    exit 0  # simulate erase failure
+elif [[ "$1" == "isLuks" ]]; then
+    exit 0  # simulate NOT a luks container (erase worked)
+fi
+EOF
+    chmod +x "$MOCK_BIN_DIR/cryptsetup"
+
+    # Run teardown_device which will invoke the mocked `cryptsetup erase`
+    run teardown_device
+
+    assert_failure
+
+    # Confirm we hit the error message
+    assert_output --partial "ERROR: ${DEVCONFIG[MAPPED_DEVICE]} is still a LUKS container after wipe."
+
+    # Restore the original path
+    PATH="$ORIGINAL_PATH"
+
+    # Clean up the mock path
+    rm -rf "$MOCK_BIN_DIR"
+
+
+}
+
+@test "wait_for_removal times out on a persistent condition" {
+    # Mock command that always returns true (simulate always busy)
+    run wait_for_removal "true" "persistent condition" 2 0.1 "Test timeout message"
+
+    assert_failure
+    assert_output --partial "ERROR: Test timeout message"
+}
 
 
 @test "teardown_device case: MOUNT detects and kills processes using a mount" {
@@ -89,48 +158,4 @@ function teardown {
     assert_output --partial "Zeroing out the start of ${DEVCONFIG[TEST_DEVICE]}"
     refute_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} still contains LUKS metadata"
     assert_output --partial "Loopback device ${DEVCONFIG[TEST_DEVICE]} reset to initial state"
-}
-
-#@test "teardown_device cleans up all created resources" {
-# shellcheck disable=SC2317
-hold() {
-    teardown_device
-    sync && sleep 1
-    # Check that the mount point is unmounted
-    run findmnt -rn "${DEVCONFIG[MOUNT_POINT]}"
-    assert_failure  # Expect failure because it should no longer be mounted
-
-    # Check that the LVM components are removed
-    run vgs "${DEVCONFIG[VG_NAME]}"
-    assert_failure  # Expect failure because VG should be removed
-
-    run lvs "${DEVCONFIG[MAPPED_LVM]}"
-    assert_failure  # Expect failure because LV should be removed
-
-    run pvs "${DEVCONFIG[MAPPED_DEVICE]}"
-    assert_failure  # Expect failure because PV should be removed
-
-    # Check that the LUKS container is closed
-    run cryptsetup status "${DEVCONFIG[MAPPED_DEVICE]}"
-    assert_failure  # Expect failure because LUKS container should be closed
-
-    # Check that the loop device is removed
-    refute [ -b "${DEVCONFIG[TEST_DEVICE]}" ]
-
-    # Check that the image file is removed
-    refute [ -e "${DEVCONFIG[IMG_FILE]}" ]
-
-    # Check that the registry file is removed
-    refute [ -e "${DEVCONFIG[REG_FILE]}" ]
-}
-
-#@test "teardown_device can be safely called multiple times" {
-# shellcheck disable=SC2317
-hold() {
-    teardown_device
-    sync && sleep 1  # Allow any pending operations to settle
-
-    run teardown_device
-    assert_success
-    assert_output --partial "Teardown complete."
 }

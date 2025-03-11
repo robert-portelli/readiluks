@@ -3,40 +3,43 @@
 function setup {
     load '../../../lib/_common_setup'
     _common_setup
+    ORIGINAL_PATH="$PATH"
     source "test/local_test_runner/lib/_device_fixture.bash"
     register_test_device
     setup_luks
 }
 
 function teardown {
+    PATH="$ORIGINAL_PATH"
+    [[ -d "$MOCK_BIN_DIR" ]] && rm -rf "$MOCK_BIN_DIR"
+    REAL_DMSETUP="$(command -v dmsetup)"
     teardown_device
 }
 
-
-@test "setup_lvm fails when LV_NAME already exists" {
-    # Create a temporary directory for our mock binaries
+# this test needs to be first to pass
+@test "setup_lvm fails when dmsetup info returns no major/minor numbers" {
     MOCK_BIN_DIR="$(mktemp -d)"
     export PATH="$MOCK_BIN_DIR:$PATH"
 
-    # Mock `lvs` to return an error (simulate LV already existing)
-    cat <<'EOF' > "$MOCK_BIN_DIR/lvs"
+    cat <<EOF > "$MOCK_BIN_DIR/dmsetup"
 #!/usr/bin/env bash
-echo "  Logical volume \"${DEVCONFIG[LV_NAME]}\" already exists." >&2
-exit 0  # Simulate success so the check in setup_lvm() passes
+if [[ "\$1" == "info" && "\$2" == "${DEVCONFIG[VG_NAME]}-${DEVCONFIG[LV_NAME]}" ]]; then
+    # Simulate dm_info being empty
+    echo ""
+    exit 0
+else
+    exec "$REAL_DMSETUP" "\$@"
+fi
 EOF
-    chmod +x "$MOCK_BIN_DIR/lvs"
+    chmod +x "$MOCK_BIN_DIR/dmsetup"
 
-    # Run setup_lvm with the mocked `lvs`
     run setup_lvm
     assert_failure
-    assert_output --partial "ERROR: Logical volume ${DEVCONFIG[MAPPED_LVM]} already exists."
-
-    # Cleanup: remove the mock after the test
-    rm -rf "$MOCK_BIN_DIR"
+    assert_output --partial "Failed to retrieve major/minor numbers for ${DEVCONFIG[MAPPED_LVM]}"
+    teardown_device
 }
 
-
-@test "BATS smoke test AND setup_lvm produces correct mutations" {
+@test "BATS smoke test" {
     # save on creating luks by smoke testing here
     run true
     assert_success
@@ -45,6 +48,9 @@ EOF
     assert [ -d "/tmp/test" ]
     refute [ -f "/tmp/test" ]
     rm -d /tmp/test
+}
+
+@test "setup_lvm() correctly mutates DEVCONFIG" {
 
     # Expected keys and their default values
     declare -A expected_config=(
@@ -92,6 +98,101 @@ EOF
     ## actually sets up lvm
     run vgs
     assert_output --partial "${DEVCONFIG[VG_NAME]}"
+}
+
+@test "setup_lvm fails if volume group creation fails" {
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `vgcreate` to simulate a failure
+    cat <<'EOF' > "$MOCK_BIN_DIR/vgcreate"
+#!/usr/bin/env bash
+echo "Simulated vgcreate failure" >&2
+exit 1
+EOF
+    chmod +x "$MOCK_BIN_DIR/vgcreate"
+
+    run setup_lvm
+    assert_failure
+    assert_output --partial "Failed to create VG"
+
+    # Cleanup
+    rm -rf "$MOCK_BIN_DIR"
+}
+
+@test "setup_lvm fails if volume group activation fails" {
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `vgchange` to simulate activation failure
+    cat <<'EOF' > "$MOCK_BIN_DIR/vgchange"
+#!/usr/bin/env bash
+if [[ "$1" == "-ay" ]]; then
+    echo "Simulated vgchange activation failure" >&2
+    exit 1
+fi
+EOF
+    chmod +x "$MOCK_BIN_DIR/vgchange"
+
+    run setup_lvm
+    assert_failure
+    assert_output --partial "Failed to activate VG"
+
+    # Restore and clean up
+    rm -rf "$MOCK_BIN_DIR"
+}
+
+
+@test "setup_lvm fails if logical volume activation fails" {
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `lvchange` to simulate logical volume activation failure
+    cat <<'EOF' > "$MOCK_BIN_DIR/lvchange"
+#!/usr/bin/env bash
+if [[ "$1" == "-ay" ]]; then
+    echo "Simulated lvchange activation failure" >&2
+    exit 1
+fi
+EOF
+    chmod +x "$MOCK_BIN_DIR/lvchange"
+
+    run setup_lvm
+    assert_failure
+    assert_output --partial "Failed to activate LV"
+
+    # Restore and clean up
+    rm -rf "$MOCK_BIN_DIR"
+}
+
+
+@test "setup_lvm fails if logical volume creation fails" {
+    DEVCONFIG[LV_NAME]=""
+    run setup_lvm
+    assert_failure
+    assert_output -p "Failed to create LV"
+}
+
+@test "setup_lvm fails when LV_NAME already exists" {
+    # Create a temporary directory for our mock binaries
+    MOCK_BIN_DIR="$(mktemp -d)"
+    export PATH="$MOCK_BIN_DIR:$PATH"
+
+    # Mock `lvs` to return an error (simulate LV already existing)
+    cat <<'EOF' > "$MOCK_BIN_DIR/lvs"
+#!/usr/bin/env bash
+echo "  Logical volume \"${DEVCONFIG[LV_NAME]}\" already exists." >&2
+exit 0  # Simulate success so the check in setup_lvm() passes
+EOF
+    chmod +x "$MOCK_BIN_DIR/lvs"
+
+    # Run setup_lvm with the mocked `lvs`
+    run setup_lvm
+    assert_failure
+    assert_output --partial "ERROR: Logical volume ${DEVCONFIG[MAPPED_LVM]} already exists."
+
+    # Cleanup: remove the mock after the test
+    rm -rf "$MOCK_BIN_DIR"
 }
 
 @test "setup_lvm() produces expected output" {
