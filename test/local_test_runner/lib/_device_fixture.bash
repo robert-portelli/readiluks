@@ -46,7 +46,11 @@ setup_luks() {
     echo -n "${DEVCONFIG[LUKS_PW]}" > /tmp/luks-pw.tmp
 
     cryptsetup luksFormat \
-        --type luks2 -s 256 -h sha512 \
+        --type luks2 \
+        --pbkdf argon2id \
+        --pbkdf-memory 512 \
+        --pbkdf-parallel 4 \
+        --pbkdf-force-iterations 4 \
         --label "${DEVCONFIG[LUKS_LABEL]}" \
         --batch-mode "${DEVCONFIG[TEST_DEVICE]}" < /tmp/luks-pw.tmp || return 1
 
@@ -60,6 +64,7 @@ setup_luks() {
     echo "LUKS ${DEVCONFIG[MAPPED_DEVICE]}" >> "${DEVCONFIG[REG_FILE]}"
     echo "LUKS container created and opened at ${DEVCONFIG[MAPPED_DEVICE]}" >&2
 }
+
 
 setup_lvm() {
     # Validate that MAPPED_DEVICE is a valid block device
