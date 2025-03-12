@@ -27,29 +27,29 @@ Readiluks is thoroughly tested using an **isolated Docker-in-Docker (DinD) envir
   - Workflow tests simulate GitHub Actions via `act`.
   - `pytest-cov` style coverage reporting for Bash scripts:
 
-    ```
-    # bash test/local_test_runner/runner.bash --test test_device_fixture --coverage
-    🔍 Running test_device_fixture_register_test_device...
-    ✅ test_device_fixture_register_test_device completed in:                          2.917s
-    🔍 Running test_device_fixture_setup_luks...
-    ✅ test_device_fixture_setup_luks completed in:                                    3.310s
-    🔍 Running test_device_fixture_setup_lvm...
-    ✅ test_device_fixture_setup_lvm completed in:                                    20.963s
-    🔍 Running test_device_fixture_format_filesystem...
-    ✅ test_device_fixture_format_filesystem completed in:                            23.426s
-    🔍 Running test_device_fixture_teardown_device...
-    ✅ test_device_fixture_teardown_device completed in:                              26.018s
+```
+# bash test/local_test_runner/runner.bash --test test_device_fixture --coverage
+🔍 Running test_device_fixture_register_test_device...
+✅ test_device_fixture_register_test_device completed in:                          2.917s
+🔍 Running test_device_fixture_setup_luks...
+✅ test_device_fixture_setup_luks completed in:                                    3.310s
+🔍 Running test_device_fixture_setup_lvm...
+✅ test_device_fixture_setup_lvm completed in:                                    20.963s
+🔍 Running test_device_fixture_format_filesystem...
+✅ test_device_fixture_format_filesystem completed in:                            23.426s
+🔍 Running test_device_fixture_teardown_device...
+✅ test_device_fixture_teardown_device completed in:                              26.018s
 
-    ⏱️  Total Runtime:                                                               76.671s
+⏱️  Total Runtime:                                                               76.671s
 
-    📊 Final Coverage Report:
+📊 Final Coverage Report:
 
-    Name                            Stmts   Miss  Cover Missing
-    ------------------------------ ------ ------ ------ ----------------
-    _device_fixture.bash              178      1  99.44% 229
-    ------------------------------ ------ ------ ------ ----------------
-    ✅ No test container to clean up.
-    ```
+Name                            Stmts   Miss  Cover Missing
+------------------------------ ------ ------ ------ ----------------
+_device_fixture.bash              178      1  99.44% 229
+------------------------------ ------ ------ ------ ----------------
+✅ No test container to clean up.
+```
 
 - 📊 **Code Coverage Support**
   - Integrated with `kcov` for coverage reports in SonarQube XML format.
