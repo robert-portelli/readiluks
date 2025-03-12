@@ -5,45 +5,56 @@
 # ------------------------------------------------------------------------------
 # Description:
 #   Provides a unified interface for executing tests within a Dockerized
-#   test environment. Supports running unit tests, integration tests,
-#   coverage analysis, and workflow simulations using DinD (Docker-in-Docker).
+#   test environment. Supports unit tests, integration tests, coverage analysis,
+#   and GitHub Actions workflow simulations, all inside a Docker-in-Docker (DinD) setup.
 #
 # Purpose:
-#   - Standardizes the execution of test cases across different environments.
-#   - Provides a containerized execution context, ensuring reproducibility.
-#   - Supports multiple test execution modes (unit, integration, workflow, coverage).
-#   - Manages Docker-in-Docker (DinD) setup for isolated testing.
-#   - Automates cleanup of test containers and loopback devices to prevent resource leaks.
-#   - Introduces `test_dind_container` and `test_container` functions for
-#     dynamic test execution inside nested and direct Docker containers.
+#   - Standardizes test execution for Readiluks with clear, consistent workflows.
+#   - Provides containerized and reproducible test runs by leveraging Docker-in-Docker.
+#   - Runs unit, integration, and workflow tests with configurable coverage reporting.
+#   - Automates cleanup of containers, loop devices, and other test resources.
+#   - Offers interactive debugging through manual container execution.
 #
 # Functions:
-#   - `test_dind_container`: Executes tests within a nested Docker container
-#     inside the DinD environment, ensuring isolation.
-#   - `test_container`: Runs a standard test container directly in the DinD environment.
-#   - `manual_nested_container`: Allows manual execution of a nested container for debugging.
-#   - `cleanup_test_device`: Ensures proper cleanup of the loopback device and image file.
-#   - `nested_container_cleanup`: Handles the removal of any orphaned containers.
+#   - load_libraries: Loads all test runner and utility libraries.
+#   - test_coverage_fixture_with_q[1-4]_coverage: Runs coverage tests for specific test groups.
+#   - test_device_fixture_[register|setup_luks|setup_lvm|format_filesystem|teardown_device]:
+#       Runs unit tests for the device fixture lifecycle.
+#   - collect_coverage_data: Executes multiple test functions and generates coverage reports.
+#   - format_coverage_report: Outputs a pytest-cov style report from collected coverage data.
+#   - test_bats_common_setup: Runs unit tests for shared setup helpers.
+#   - unit_test_parser / integration_test_parser: Tests argument parsing, unit and integration.
+#   - test_dind_container / test_container: Launches test containers interactively or for debugging.
+#   - manual_nested_container: Runs a manual nested container for debugging inside DinD.
+#   - file_check: Validates the presence of source and test files before execution.
+#   - main: Parses arguments, loads config, and dispatches to the correct test function.
 #
 # Usage:
 #   bash test/local_test_runner/runner.bash --test <test_function> [options]
 #
 # Example(s):
-#   # Run a test script inside a nested container
-#   bash test/local_test_runner/runner.bash --test test_dind_container
+#   # Run a specific unit test
+#   bash test/local_test_runner/runner.bash --test test_device_fixture_register_test_device
 #
-#   # Run a manual container for interactive debugging
+#   # Run integration tests with coverage
+#   bash test/local_test_runner/runner.bash --test integration_test_parser --coverage
+#
+#   # Start a manual debugging container inside DinD
 #   bash test/local_test_runner/runner.bash --test manual_nested_container
 #
 # Requirements:
-#   - Docker installed and running.
-#   - The following Docker images must be available:
-#       - `robertportelli/test-readiluks:latest`: Test container based on Arch Linux.
-#       - `docker:dind`: Docker-in-Docker (DinD) container used for isolated testing.
-#   - The following Dockerfiles are packaged with the repository:
-#       - `docker/test/Dockerfile.inner`: Defines the test environment and is pushed to Docker Hub.
-#       - `docker/test/Dockerfile.outer`: Defines the DinD environment used for nested containers.
-#   - The outer DinD container must be running for isolated test execution.
+#   - Docker installed and running on the host.
+#   - Docker-in-Docker (DinD) image available:
+#       - `docker:dind` or custom-built from `docker/test/Dockerfile.outer`
+#   - Test container image available:
+#       - `robertportelli/test-readiluks:latest` or built from `docker/test/Dockerfile.inner`
+#   - Inner test container must include BATS, kcov, and act.
+#   - Requires `kcov` for code coverage and `act` for workflow simulations.
+#
+# CI/CD Integration:
+#   - GitHub Actions workflow simulations supported via `act`.
+#   - Pre-merge workflow validation and coverage enforced via CI.
+#   - Super-Linter configured for static analysis and style enforcement.
 #
 # Author:
 #   Robert Portelli
@@ -53,8 +64,7 @@
 #   See repository tags or release notes.
 #
 # License:
-#   See repository license file (e.g., LICENSE.md).
-#   See repository commit history (e.g., `git log`).
+#   MIT License. See LICENSE.md and repository commit history (`git log`).
 # ==============================================================================
 
 

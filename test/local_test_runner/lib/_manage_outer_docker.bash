@@ -3,14 +3,20 @@
 # ------------------------------------------------------------------------------
 # Description:
 #   Manages the lifecycle of the outer Docker-in-Docker (DinD) container used for
-#   isolated test execution. Ensures that outer DinD is running and that the required
-#   test image is available inside it.
+#   isolated test execution. Ensures that the DinD container is running and that
+#   the required test image is available inside the DinD environment.
 #
 # Purpose:
-#   - Starts the outer DinD container (`docker:dind` with custom setup) if it is not already running.
-#   - Ensures the test image (`robertportelli/test-readiluks:latest`) is available inside DinD.
-#   - Provides an isolated Docker environment for executing tests.
-#   - Uses the Dockerfile at `docker/test/Dockerfile.outer` to build the DinD image.
+#   - Starts the outer DinD container (using a custom Dockerfile) if it is not already running.
+#   - Builds the DinD image from `docker/test/Dockerfile.outer` if it does not exist.
+#   - Waits for the Docker daemon inside DinD to become ready before proceeding.
+#   - Ensures the test image (`${CONFIG[IMAGENAME]}`) is available inside DinD by:
+#       * Checking for the image inside DinD.
+#       * Building the image locally if it doesn't exist.
+#       * Pulling the image from Docker Hub as a fallback if build fails.
+#       * Saving, copying, and loading the image into DinD if not already present.
+#   - Provides an isolated Docker environment for executing nested test containers,
+#     enabling safe testing of `readiluks` without impacting the host system.
 #
 # Options:
 #   This script does not accept command-line options. It is sourced by the test
@@ -28,6 +34,8 @@
 #   - Must be sourced before calling `start_dind()`.
 #   - Requires Docker to be installed and running on the host.
 #   - Assumes the DinD container is used for executing nested test containers.
+#   - Relies on `${CONFIG[DIND_IMAGE]}`, `${CONFIG[DIND_CONTAINER]}`, and related variables
+#     to be properly initialized before invoking `start_dind()`.
 #
 # Author:
 #   Robert Portelli
