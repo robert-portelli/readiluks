@@ -11,23 +11,24 @@
 # Purpose:
 #   - Standardizes test execution for Readiluks with clear, consistent workflows.
 #   - Provides containerized and reproducible test runs by leveraging Docker-in-Docker.
-#   - Runs unit, integration, and workflow tests with configurable coverage reporting.
+#   - Runs unit, integration, workflow tests, and collects coverage reports.
+#   - Delegates coverage collection and reporting to the encapsulated _coverage.bash module.
 #   - Automates cleanup of containers, loop devices, and other test resources.
 #   - Offers interactive debugging through manual container execution.
 #
 # Functions:
-#   - load_libraries: Loads all test runner and utility libraries.
+#   - load_libraries: Loads all test runner and utility libraries, including _coverage.bash.
 #   - test_coverage_fixture_with_q[1-4]_coverage: Runs coverage tests for specific test groups.
+#   - test_coverage_fixture: Aggregates coverage for the _coverage_fixture module.
 #   - test_device_fixture_[register|setup_luks|setup_lvm|format_filesystem|teardown_device]:
-#       Runs unit tests for the device fixture lifecycle.
-#   - collect_coverage_data: Executes multiple test functions and generates coverage reports.
-#   - format_coverage_report: Outputs a pytest-cov style report from collected coverage data.
-#   - test_bats_common_setup: Runs unit tests for shared setup helpers.
-#   - unit_test_parser / integration_test_parser: Tests argument parsing, unit and integration.
-#   - test_dind_container / test_container: Launches test containers interactively or for debugging.
-#   - manual_nested_container: Runs a manual nested container for debugging inside DinD.
-#   - file_check: Validates the presence of source and test files before execution.
-#   - main: Parses arguments, loads config, and dispatches to the correct test function.
+#       Runs unit tests for device fixture lifecycle.
+#   - test_device_fixture: Aggregates coverage for device fixture tests.
+#   - test_bats_common_setup: Runs unit tests for shared setup helpers (_common_setup.bash).
+#   - unit_test_parser / integration_test_parser: Tests argument parsing and integration flow.
+#   - test_dind_container / test_container: Launches test containers (DinD or direct) for debugging.
+#   - manual_nested_container: Runs an interactive nested container inside DinD.
+#   - file_check: Validates presence of required source and test files before execution.
+#   - main: Parses arguments, loads config, and dispatches to the specified test function.
 #
 # Usage:
 #   bash test/local_test_runner/runner.bash --test <test_function> [options]
@@ -36,10 +37,13 @@
 #   # Run a specific unit test
 #   bash test/local_test_runner/runner.bash --test test_device_fixture_register_test_device
 #
-#   # Run integration tests with coverage
-#   bash test/local_test_runner/runner.bash --test integration_test_parser --coverage
+#   # Run all coverage tests for device fixtures
+#   bash test/local_test_runner/runner.bash --test test_device_fixture --coverage
 #
-#   # Start a manual debugging container inside DinD
+#   # Run an integration test with workflow simulation
+#   bash test/local_test_runner/runner.bash --test integration_test_parser --workflow
+#
+#   # Start a manual nested container for debugging inside DinD
 #   bash test/local_test_runner/runner.bash --test manual_nested_container
 #
 # Requirements:
@@ -49,28 +53,28 @@
 #   - Test container image available:
 #       - `robertportelli/test-readiluks:latest` or built from `docker/test/Dockerfile.inner`
 #   - Inner test container must include BATS, kcov, and act.
-#   - Requires `kcov` for code coverage and `act` for workflow simulations.
+#   - Requires `kcov` for code coverage and `act` for GitHub Actions workflow simulations.
 #
 # CI/CD Integration:
-#   - GitHub Actions workflow simulations supported via `act`.
-#   - Pre-merge workflow validation and coverage enforced via CI.
-#   - Super-Linter configured for static analysis and style enforcement.
-#
-# Author:
-#   Robert Portelli
-#   Repository: https://github.com/robert-portelli/readiluks
+#   - GitHub Actions workflows simulate local runs via `act`.
+#   - Pre-merge testing and coverage checks are automated through CI pipelines.
+#   - Super-Linter runs automated linting and style checks.
 #
 # Version:
-#   See repository tags or release notes.
+#   See repository tags or release notes for the current version.
 #
 # License:
 #   MIT License. See LICENSE.md and repository commit history (`git log`).
+#
+# Author:
+#   Robert Portelli
+#   https://github.com/robert-portelli/readiluks
 # ==============================================================================
-
 
 BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 load_libraries() {
+    source "$BASEDIR/test/local_test_runner/lib/_coverage.bash"
     source "$BASEDIR/test/local_test_runner/lib/_runner-config.bash"
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
@@ -121,183 +125,6 @@ test_coverage_fixture_with_q4_coverage() {
     file_check "$source_file" "$test_file" || return 1
 
     run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
-}
-
-print_timing_line() {
-    local label="$1"  # e.g. "✅ test_device_fixture_setup_luks completed in:"
-    local time="$2"   # e.g. "50.673"
-
-    local total_width=88  # Target column where 's' ends (tweak this number as needed)
-    local label_length=${#label}
-    local time_length=${#time}
-
-    local spaces=$((total_width - label_length - time_length - 1))  # 1 for 's'
-
-    # Safety check to prevent negative spacing
-    [[ $spaces -lt 1 ]] && spaces=1
-
-    # Build the padding
-    local padding
-    padding=$(printf '%*s' "$spaces" "")
-
-    # Print the result
-    printf "%s%s%s\n" "$label" "$padding" "$time"s
-}
-
-collect_coverage_data() {
-    local test_functions=("$@")
-    local all_lines_file
-    local covered_lines_file
-    local uncovered_lines_file
-    all_lines_file="$(mktemp)"
-    covered_lines_file="$(mktemp)"
-    uncovered_lines_file="$(mktemp)"
-
-    local source_file="UNKNOWN"
-
-    # Start the total timer
-    local start_total
-    start_total=$(date +%s%3N)
-
-    #echo -e "\nCoverage Report:\n"
-
-    # Step 1: Collect coverage output and data per test (single run!)
-    for test_function in "${test_functions[@]}"; do
-        echo "🔍 Running $test_function..."
-
-        local start_time
-        start_time=$(date +%s%3N)
-
-        local coverage_output
-        coverage_output="$($test_function)"
-
-        local end_time
-        end_time=$(date +%s%3N)
-        local elapsed_ms
-        elapsed_ms=$((end_time - start_time))
-        local elapsed_sec
-        elapsed_sec="$((elapsed_ms / 1000)).$(printf "%03d" $((elapsed_ms % 1000)))"
-
-        print_timing_line "✅ $test_function completed in:" "$elapsed_sec"
-
-        # Extract source file if not already done
-        if [[ "$source_file" == "UNKNOWN" ]]; then
-            source_file=$(echo "$coverage_output" | grep -oP '(?<=<file path=")[^"]+' | head -n 1)
-            source_file=$(basename "$source_file")
-        fi
-
-        # Collect all lines needing coverage
-        echo "$coverage_output" | grep 'lineNumber="' | awk -F'"' '{print $2}' >> "$all_lines_file"
-
-        # Collect covered lines
-        echo "$coverage_output" | grep 'covered="true"' | awk -F'"' '{print $2}' >> "$covered_lines_file"
-    done
-
-    # Remove duplicates
-    sort -u "$all_lines_file" -o "$all_lines_file"
-    sort -u "$covered_lines_file" -o "$covered_lines_file"
-
-    # Compute uncovered lines
-    comm -23 "$all_lines_file" "$covered_lines_file" > "$uncovered_lines_file"
-
-    # End the total timer
-    local end_total
-    end_total=$(date +%s%3N)
-    local total_elapsed_ms
-    total_elapsed_ms=$((end_total - start_total))
-    local total_elapsed_sec
-     total_elapsed_sec="$((total_elapsed_ms / 1000)).$(printf "%03d" $((total_elapsed_ms % 1000)))"
-
-    echo ""
-    print_timing_line "⏱️  Total Runtime:" "$total_elapsed_sec"
-
-    format_coverage_report "$source_file" "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
-
-    rm -f "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
-}
-
-
-
-format_missing_lines() {
-    # shellcheck disable=SC2207
-    local sorted_lines=($(echo "$1" | tr ',' '\n' | sort -n | uniq))
-    local formatted=""
-    local start=-1
-    local prev=-1
-
-    for line in "${sorted_lines[@]}"; do
-        if [[ $start -eq -1 ]]; then
-            start=$line
-        elif [[ $((prev + 1)) -ne $line ]]; then
-            if [[ $start -eq $prev ]]; then
-                formatted+="${start},"
-            else
-                formatted+="${start}-${prev},"
-            fi
-            start=$line
-        fi
-        prev=$line
-    done
-
-    if [[ $start -eq $prev ]]; then
-        formatted+="${start}"
-    else
-        formatted+="${start}-${prev}"
-    fi
-
-    echo "$formatted"
-}
-
-calculate_coverage() {
-    local missed="$1"
-    local total="$2"
-    awk -v missed="$missed" -v total="$total" 'BEGIN {
-        if (total > 0)
-            printf "%.2f", 100 - (missed * 100 / total);
-        else
-            printf "100.00";
-    }'
-}
-
-format_coverage_report() {
-    local source_file="$1"
-    local all_lines_file="$2"
-    local covered_lines_file="$3"
-    local uncovered_lines_file="$4"
-    local report_tmp
-    report_tmp="$(mktemp)"
-
-    # Compute statistics
-    local total_statements
-    total_statements=$(wc -l < "$all_lines_file")
-
-    local missed_statements
-    missed_statements=$(wc -l < "$uncovered_lines_file")
-
-    local coverage
-    if [[ "$total_statements" -gt 0 ]]; then
-        coverage=$(calculate_coverage "$missed_statements" "$total_statements")
-    else
-        coverage="100"
-    fi
-
-    # Format missing lines
-    local missing_lines
-    missing_lines=$(format_missing_lines "$(tr '\n' ',' < "$uncovered_lines_file" | sed 's/,$//')")
-
-    # Store report
-    printf "%-30s %6d %6d %6.2f%% %s\n" \
-        "$source_file" "$total_statements" "$missed_statements" "$coverage" \
-        "${missing_lines:-None}" >> "$report_tmp"
-
-    # Print report
-    echo -e "\n📊 Final Coverage Report:\n"
-    printf "%-30s %6s %6s %6s %s\n" "Name" "Stmts" "Miss" "Cover" "Missing"
-    printf "%-30s %6s %6s %6s %s\n" "------------------------------" "------" "------" "------" "----------------"
-    cat "$report_tmp"
-    printf "%-30s %6s %6s %6s %s\n" "------------------------------" "------" "------" "------" "----------------"
-
-    rm -f "$report_tmp"
 }
 
 

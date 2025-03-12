@@ -165,6 +165,7 @@ bash test/local_test_runner/runner.bash --test manual_nested_container
     │   └── _common_setup.bash                # Shared setup helpers
     ├── local_test_runner
     │   ├── lib
+    │   │   ├── _coverage.bash               # pytest-cov style coverage reporting for Bash
     │   │   ├── _device_fixture.bash         # Device lifecycle: loop -> LUKS -> LVM -> FS
     │   │   ├── _manage_outer_docker.bash    # Starts outer DinD container and loads test images
     │   │   ├── _nested-docker-cleanup.bash  # Cleans up nested containers inside DinD
