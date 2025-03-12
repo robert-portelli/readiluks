@@ -2,46 +2,51 @@
 # Filename: test/local_test_runner/lib/_run-test.bash
 # ------------------------------------------------------------------------------
 # Description:
-#   Executes requested tests within a nested test container inside DinD.
-#   Supports unit tests, integration tests, coverage analysis, and workflow tests.
+#   Executes tests within a nested test container running inside the outer
+#   Docker-in-Docker (DinD) environment. Supports unit tests, integration tests,
+#   coverage analysis using kcov, and workflow tests simulated via `act`.
 #
 # Purpose:
-#   - Determines the requested test type (unit, integration, workflow).
-#   - Executes the appropriate test command inside a nested container.
-#   - Runs BATS tests for unit/integration tests.
-#   - Supports coverage analysis with kcov.
-#   - Executes workflow tests using `act` to simulate GitHub Actions.
+#   - Runs BATS tests (unit or integration) inside the nested test container.
+#   - Performs code coverage analysis using `kcov`, capturing results in SonarQube XML format.
+#   - Executes workflow tests using `act` to simulate GitHub Actions workflows inside DinD.
+#   - Supports dynamic switching between test types based on the `CONFIG` flags:
+#       * `CONFIG[COVERAGE]` - enables coverage testing.
+#       * `CONFIG[WORKFLOW]` - enables workflow testing.
+#   - Streams output from tests in real time for easy feedback.
 #
-# Options:
-#   This script does not accept command-line options. It is sourced by the test
-#   runner and its functions.
+# Functions:
+#   - run_test:
+#       Executes BATS unit/integration tests, coverage analysis with `kcov`,
+#       or workflow simulations with `act` depending on the provided configuration.
 #
 # Usage:
 #   source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
 #   run_test <source_file> <test_file> <workflow_event> <workflow_job>
 #
 # Example(s):
-#   # Run a unit test
+#   # Run a unit test with BATS (default behavior)
 #   run_test "src/lib/_parser.bash" "test/unit/test_parser.bats" "" ""
 #
-#   # Run an integration test
+#   # Run an integration test with BATS
 #   run_test "src/main.bash" "test/integration/test_parser.bats" "" ""
 #
-#   # Run a coverage test
+#   # Run a coverage test using kcov
 #   CONFIG[COVERAGE]=true
 #   run_test "src/lib/_parser.bash" "test/unit/test_parser.bats" "" ""
 #
-#   # Run a workflow test
+#   # Run a workflow test using act
 #   CONFIG[WORKFLOW]=true
 #   run_test "src/lib/_parser.bash" "test/unit/test_parser.bats" "workflow_dispatch" "unit-test-parser"
 #
 # Requirements:
 #   - Must be sourced before calling `run_test()`.
-#   - Requires `_run-in-docker.bash` for spawning nested test containers.
-#   - Requires `_runner-config.bash` for test environment settings.
-#   - Assumes BATS is installed for running shell script tests.
-#   - Assumes kcov is installed for code coverage analysis.
-#   - Assumes `act` is available for workflow tests.
+#   - Requires `_run-in-docker.bash` to manage container execution in DinD.
+#   - Requires `_runner-config.bash` to load the global `CONFIG` settings.
+#   - Requires BATS installed in the test container for shell script testing.
+#   - Requires kcov installed in the test container for coverage reporting.
+#   - Requires `act` installed in the test container for workflow simulations.
+#   - Assumes Docker and DinD are configured and running.
 #
 # Author:
 #   Robert Portelli
@@ -54,50 +59,6 @@
 #   See repository license file (e.g., LICENSE.md).
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
-
-run_coverage_analysis() {
-    local source_file="$1"
-    local test_file="$2"
-
-    # Create a temp directory for kcov
-    local kcov_dir
-    kcov_dir="$(mktemp -d)"
-
-    # Run coverage analysis inside the test container
-    run_in_docker "kcov --clean --include-path='${source_file}' \"${kcov_dir}\" bats '${test_file}' > /dev/null 2>&1"
-
-    # Verify kcov output exists before proceeding
-    if [[ -f "${kcov_dir}/bats/sonarqube.xml" ]]; then
-        # Extract uncovered lines
-        uncovered_lines=$(grep 'covered="false"' "${kcov_dir}/bats/sonarqube.xml" | sed -n 's/.*lineNumber="\([0-9]*\)".*/\1/p')
-    else
-        echo "⚠️  Warning: Coverage report missing. No coverage data available."
-        uncovered_lines=""
-    fi
-
-    # Count total statements (approximated by the last line number in the source file)
-    local total_statements
-    total_statements=$(wc -l < "${source_file}")
-
-    # Count the number of uncovered statements
-    local missed_statements
-    missed_statements=$(echo "$uncovered_lines" | wc -l)
-
-    # Calculate coverage percentage (using floating point)
-    local coverage
-    if [[ "$total_statements" -gt 0 ]]; then
-        coverage=$(awk "BEGIN {printf \"%.1f\", (100 - ($missed_statements * 100 / $total_statements))}")
-    else
-        coverage=100.0
-    fi
-
-    # Print tabular coverage output
-    printf "\n%-30s %6s %6s %6s %s\n" "Name" "Stmts" "Miss" "Cover" "Missing"
-    printf "%-30s %6d %6d %5.1f%% %s\n" "${source_file}" "${total_statements}" "${missed_statements}" "${coverage}" "${uncovered_lines:-None}"
-
-    # Cleanup temporary files
-    rm -rf "${kcov_dir}"
-}
 
 run_test() {
     local test_name="${FUNCNAME[1]}"
