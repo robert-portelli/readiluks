@@ -18,7 +18,8 @@ RUN pacman -S --noconfirm --needed \
     kcov \
     git \
     lvm2 \
-    btrfs-progs
+    btrfs-progs \
+    parallel
 
 # Set working directory
 WORKDIR /workspace
