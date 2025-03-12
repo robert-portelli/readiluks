@@ -25,9 +25,9 @@ Readiluks is thoroughly tested using an **isolated Docker-in-Docker (DinD) envir
   - Unit tests for each core function (e.g., `setup_luks()`, `teardown_device()`).
   - Integration tests for combined workflows.
   - Workflow tests simulate GitHub Actions via `act`.
-  - `pytest-cov` style coverage reporting for Bash scripts:
+  - `pytest-cov` style coverage reporting for Bash scripts
 
-```
+```bash
 # bash test/local_test_runner/runner.bash --test test_device_fixture --coverage
 🔍 Running test_device_fixture_register_test_device...
 ✅ test_device_fixture_register_test_device completed in:                          2.917s
@@ -113,8 +113,8 @@ bash test/local_test_runner/runner.bash --test test_device_fixture --coverage
 bash test/local_test_runner/runner.bash --test test_parser --workflow
 ```
 
-### 💮 Start an interactive nested container:
-```
+### 💮 Start an interactive nested container
+```bash
 bash test/local_test_runner/runner.bash --test manual_nested_container
 ```
 
