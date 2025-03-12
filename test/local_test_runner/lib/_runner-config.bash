@@ -63,7 +63,8 @@ declare -gA CONFIG=(
     [DIND_FILE]="docker/test/Dockerfile.outer"
     [DIND_IMAGE]="test-readiluks-outer"
     [DIND_CONTAINER]="test-readiluks-outer-container"
-    [TEST_FILE_SIZE]="1024M"
-    [TEST_FILE]="" # set by _run-in-docker.bash
-    [TEST_DEVICE]="" # set by _run-in-docker.bash
 )
+
+#    [TEST_FILE_SIZE]="1024M"
+#    [TEST_FILE]="" # set by _run-in-docker.bash
+#    [TEST_DEVICE]="" # set by _run-in-docker.bash
