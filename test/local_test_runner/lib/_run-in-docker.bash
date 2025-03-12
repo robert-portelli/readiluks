@@ -3,35 +3,41 @@
 # ------------------------------------------------------------------------------
 # Description:
 #   Manages the execution of a nested test container inside the outer Docker-in-Docker
-#   (DinD) environment, including loopback device management for testing.
+#   (DinD) environment. Handles the creation and cleanup of a loopback device on the host,
+#   which is passed through to the inner test container for safe and isolated device testing.
 #
 # Purpose:
-#   - Starts a test container inside DinD (`docker:dind` with custom setup).
-#   - Prepares a loopback device on the host and passes it to the container.
-#   - Executes the provided command inside the test container.
-#   - Ensures the test image `robertportelli/test-readiluks:latest` is available
-#     inside DinD before running tests.
-#   - Captures and streams logs from the test container in real time.
-#   - Properly cleans up the test container and loopback device after execution
-#     to avoid resource leaks.
+#   - Starts a test container inside DinD (launched via a custom outer DinD container).
+#   - Creates a loopback device on the host using an image file to simulate a block device.
+#   - Passes the loopback device to the test container inside DinD for use in tests.
+#   - Ensures the required test image (`${CONFIG[IMAGENAME]}`) is available inside DinD
+#     before launching the test container.
+#   - Executes the provided command inside the test container and streams logs in real time.
+#   - Stops and removes the test container after execution to ensure a clean environment.
+#   - Cleans up the loopback device and temporary image file to prevent resource leakage.
 #
 # Functions:
-#   - create_test_device: Creates and configures a loopback device on the host.
-#   - cleanup_test_device: Cleans up the loopback device and associated resources.
-#   - run_in_docker: Manages the lifecycle of the test container inside DinD.
+#   - create_test_device:
+#       Creates a temporary image file, sets up a loopback device, and registers it in CONFIG.
+#   - cleanup_test_device:
+#       Detaches the loopback device, removes the temporary image file, and verifies cleanup.
+#   - run_in_docker:
+#       Ensures DinD is running, verifies the test image exists inside DinD,
+#       creates the test device, runs the test container, streams logs, and performs cleanup.
 #
 # Usage:
 #   source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
 #   run_in_docker "<command>"
 #
 # Example:
-#   # Run a test script inside a nested container
+#   # Run a Bats test suite inside the nested test container
 #   run_in_docker "bats test/unit/test_parser.bats"
 #
 # Requirements:
-#   - Requires `_manage_outer_docker.bash` for ensuring DinD is running.
-#   - Requires `_runner-config.bash` for global configuration variables.
-#   - Assumes the DinD container is running and the test image is available.
+#   - Requires `_manage_outer_docker.bash` to start and manage the outer DinD container.
+#   - Requires `_runner-config.bash` to initialize global configuration variables in CONFIG.
+#   - Docker must be installed and running on the host.
+#   - Assumes the DinD container is already running and ready, or `start_dind` will initialize it.
 #
 # Author:
 #   Robert Portelli
