@@ -1,6 +1,6 @@
 # 🌳 Show project structure
 tree:
-	@tree --prune -I "*~|*.bak"
+	@tree --prune -a -I "*~|*.bak|.git"
 
 # Find references to a given string in the project directory.
 # Usage:
