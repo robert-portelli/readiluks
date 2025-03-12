@@ -1,5 +1,106 @@
-# File: _device_fixture.bash
-# Purpose: Provides functions to create and teardown a loopback device as a LUKS container.
+# ==============================================================================
+# Filename: test/local_test_runner/lib/_device_fixture.bash
+# ------------------------------------------------------------------------------
+# Description:
+#   Provides functions to create, configure, and teardown a loopback-backed LUKS
+#   container with an LVM-managed logical volume, formatted with a filesystem, and
+#   mounted for use during tests. Designed for safe, repeatable testing of device
+#   workflows inside nested Docker-in-Docker (DinD) environments.
+#
+# Purpose:
+#   - Creates a temporary loopback device backed by an image file.
+#   - Initializes a LUKS2 container on the loopback device using `cryptsetup`.
+#   - Configures LVM (PV, VG, LV) on top of the opened LUKS container.
+#   - Formats the logical volume with a filesystem (default: Btrfs).
+#   - Mounts the filesystem for test use.
+#   - Tracks all resources (loop device, LUKS container, LVM objects, mounts) in a registry file.
+#   - Provides a complete teardown process to safely and thoroughly remove all created resources,
+#     ensuring no leaks or dangling devices remain after testing.
+#
+# Functions:
+#   - _initialize_DEVCONFIG:
+#       Initializes the `DEVCONFIG` associative array with default values for LUKS, LVM, FS type,
+#       mount points, and creates a temporary registry file for tracking resources.
+#
+#   - register_test_device:
+#       Validates and registers the test loopback device in the `DEVCONFIG` registry.
+#
+#   - setup_luks:
+#       Creates and opens a LUKS2 container on the loopback device, storing the mapping in `/dev/mapper/`.
+#       Password handling is performed securely using a temporary file.
+#
+#   - setup_lvm:
+#       Configures LVM on the opened LUKS container: creates PV, VG, and LV.
+#       Ensures device nodes are created and available. Handles cleanup on failure.
+#
+#   - format_filesystem:
+#       Formats the logical volume with the specified filesystem (default: Btrfs),
+#       mounts it at the configured mount point, and registers the mount for cleanup.
+#
+#   - wait_for_removal:
+#       Utility function to poll for the removal of devices or mounts, ensuring proper teardown timing.
+#
+#   - teardown_device:
+#       Safely tears down and cleans up all resources recorded in the registry file, including:
+#         * Unmounting the filesystem
+#         * Deleting the logical volume and volume group
+#         * Removing the physical volume
+#         * Closing and erasing the LUKS container
+#         * Resetting the loopback device
+#       Performs verification at each step to confirm successful removal and device cleanup.
+#
+# Usage:
+#   source "$BASEDIR/test/local_test_runner/lib/_device_fixture.bash"
+#
+#   _initialize_DEVCONFIG
+#   register_test_device
+#   setup_luks
+#   setup_lvm
+#   format_filesystem
+#   # ... perform test operations ...
+#   teardown_device
+#
+# Example:
+#   # Full lifecycle example
+#   _initialize_DEVCONFIG
+#   TEST_DEVICE="/dev/loopX" register_test_device
+#   setup_luks
+#   setup_lvm
+#   format_filesystem
+#   # Test operations...
+#   teardown_device
+#
+# Requirements:
+#   - Requires root privileges for loop device management, LUKS, and LVM operations.
+#   - Requires the following tools to be installed inside the test environment:
+#       * losetup
+#       * cryptsetup
+#       * lvm2 tools (pvcreate, vgcreate, lvcreate, etc.)
+#       * mkfs tools (default: mkfs.btrfs)
+#       * udevadm
+#       * dmsetup
+#       * wipefs
+#       * fuser
+#   - Assumes the environment is running in a controlled test container (DinD).
+#
+# Notes:
+#   - DEVCONFIG is a global associative array storing all device fixture state and paths.
+#   - All created resources are logged in a temporary registry file for accurate teardown.
+#   - Teardown is idempotent and validates removal of each resource.
+#   - The workflow is designed for testing readiluks and related device handling logic
+#     without risk to physical host devices.
+#
+# Author:
+#   Robert Portelli
+#   Repository: https://github.com/robert-portelli/readiluks
+#
+# Version:
+#   See repository tags or release notes.
+#
+# License:
+#   See repository license file (e.g., LICENSE.md).
+#   See repository commit history (e.g., `git log`).
+# ==============================================================================
 
 declare -gA DEVCONFIG  # Declare the array but don't initialize it here
 
