@@ -131,7 +131,7 @@ bash test/local_test_runner/runner.bash --test manual_nested_container
 │   └── workflows
 │       ├── default-branch-protection.yaml    # Enforces branch protection on default branch
 │       ├── non-default-branch-protection.yaml # Protects non-default branches
-│       ├── solo-dev-pr-approve.yaml          # Approves PRs targeting solo-dev branches
+│       ├── solo-dev-pr-approve.yaml          # Approves PRs if only one repo admin exists
 │       ├── super-linter.yaml                 # Runs Super-Linter for code quality checks
 │       ├── test_parser.yaml                  # CI for parser unit/integration tests
 │       └── test_test_environment.yaml        # CI for test environment validation
