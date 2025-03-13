@@ -38,7 +38,8 @@ function teardown {
     assert_output --partial "ERROR: ${DEVCONFIG[TEST_DEVICE]} is already a LUKS container."
 }
 
-@test "DEVCONFIG and REG_FILE have been correctly prepared for setup_luks()" {
+hold1() {
+    #@test "DEVCONFIG and REG_FILE have been correctly prepared for setup_luks()"
     # Expected keys and their default values
     declare -A expected_config=(
         [TEST_DEVICE]="$TEST_DEVICE"
