@@ -73,6 +73,96 @@
 #   MIT License. See LICENSE.md and repository commit history (`git log`).
 # ==============================================================================
 
+collect_parallel_1_coverage_data() {
+    local test_functions=("${@:1:$(($#-1))}")  # All args but last
+    local coverage_dir="${!#}"                 # Last argument
+
+    echo "🚀 Running parallel coverage collection on: ${test_functions[*]}"
+
+    local cmds=()
+
+    for test_fn in "${test_functions[@]}"; do
+        local uuid
+        uuid="$(uuidgen | cut -c -5)"
+        local coverage_file="$coverage_dir/coverage_output_${uuid}.xml"
+
+        # Build the command string for bash -c, making sure all variables are expanded here
+        cmds+=("bash -c 'source \"$BASEDIR/test/local_test_runner/runner.bash\"; \
+        load_libraries; \
+        source \"$BASEDIR/test/local_test_runner/lib/_coverage.bash\"; \
+        export COVERAGE_FILE=\"$coverage_file\"; \
+        echo \"🔍 Running ${test_fn}...\"; \
+        start_time=\$(date +%s%3N); \
+        $test_fn > /dev/null 2>&1; \
+        end_time=\$(date +%s%3N); \
+        elapsed_ms=\$((end_time - start_time)); \
+        elapsed_sec=\$((elapsed_ms / 1000)).\$(printf \"%03d\" \$((elapsed_ms % 1000))); \
+        print_timing_line \"✅ ${test_fn} completed in:\" \"\$elapsed_sec\"; \
+        '")
+    done
+
+    # Execute in parallel (remove --dry-run to actually run)
+    parallel --jobs 0 ::: "${cmds[@]}"
+}
+
+
+collect_coverage_data() {
+    local test_functions=("$@")
+
+    # Directory to store individual coverage outputs
+    local coverage_dir="${COVERAGE_DIR:-/tmp/readiluks_coverage}"
+    mkdir -p "$coverage_dir"
+
+    echo "📂 Collecting coverage data in: $coverage_dir"
+
+    # Start total timer
+    local start_total
+    start_total=$(date +%s%3N)
+
+    if [[ "${CONFIG[PARALLEL_1]}" == "true" ]]; then
+        collect_parallel_1_coverage_data "${test_functions[@]}" "$coverage_dir"
+    else
+        for test_function in "${test_functions[@]}"; do
+            echo "🔍 Running $test_function..."
+
+            local start_time
+            start_time=$(date +%s%3N)
+
+            local uuid
+            uuid="$(uuidgen | cut -c -5)"
+            local coverage_file="$coverage_dir/coverage_output_${uuid}.xml"
+
+            # Run the test and collect coverage output
+            local coverage_output
+            coverage_output="$($test_function)"
+
+            # Write output to unique XML file
+            echo "$coverage_output" > "$coverage_file"
+
+            local end_time
+            end_time=$(date +%s%3N)
+            local elapsed_ms
+            elapsed_ms=$((end_time - start_time))
+            local elapsed_sec
+            elapsed_sec="$((elapsed_ms / 1000)).$(printf "%03d" $((elapsed_ms % 1000)))"
+
+            print_timing_line "✅ $test_function completed in:" "$elapsed_sec"
+        done
+    fi
+
+    local end_total
+    end_total=$(date +%s%3N)
+    local total_elapsed_ms
+    total_elapsed_ms=$((end_total - start_total))
+    local total_elapsed_sec
+    total_elapsed_sec="$((total_elapsed_ms / 1000)).$(printf "%03d" $((total_elapsed_ms % 1000)))"
+
+    echo ""
+    print_timing_line "⏱️  Total Collection Time:" "$total_elapsed_sec"
+
+    parse_coverage_data "$coverage_dir"
+}
+
 print_timing_line() {
     local label="$1"  # e.g. "✅ test_device_fixture_setup_luks completed in:"
     local time="$2"   # e.g. "50.673"
@@ -94,8 +184,23 @@ print_timing_line() {
     printf "%s%s%s\n" "$label" "$padding" "$time"s
 }
 
-collect_coverage_data() {
-    local test_functions=("$@")
+parse_coverage_data() {
+    local coverage_dir="$1"
+
+    if [[ ! -d "$coverage_dir" ]]; then
+        echo "❌ No coverage directory found at $coverage_dir"
+        return 1
+    fi
+
+    shopt -s nullglob
+    local coverage_files=("$coverage_dir"/*)
+    shopt -u nullglob
+
+    if [[ ${#coverage_files[@]} -eq 0 ]]; then
+        echo "❌ No coverage files found in $coverage_dir"
+        return 1
+    fi
+
     local all_lines_file
     local covered_lines_file
     local uncovered_lines_file
@@ -105,66 +210,38 @@ collect_coverage_data() {
 
     local source_file="UNKNOWN"
 
-    # Start the total timer
-    local start_total
-    start_total=$(date +%s%3N)
+    for file in "${coverage_files[@]}"; do
+        if [[ ! -s "$file" ]]; then
+            echo "⚠️ Skipping empty or missing file: $file"
+            continue
+        fi
 
-    #echo -e "\nCoverage Report:\n"
-
-    # Step 1: Collect coverage output and data per test (single run!)
-    for test_function in "${test_functions[@]}"; do
-        echo "🔍 Running $test_function..."
-
-        local start_time
-        start_time=$(date +%s%3N)
-
-        local coverage_output
-        coverage_output="$($test_function)"
-
-        local end_time
-        end_time=$(date +%s%3N)
-        local elapsed_ms
-        elapsed_ms=$((end_time - start_time))
-        local elapsed_sec
-        elapsed_sec="$((elapsed_ms / 1000)).$(printf "%03d" $((elapsed_ms % 1000)))"
-
-        print_timing_line "✅ $test_function completed in:" "$elapsed_sec"
-
-        # Extract source file if not already done
         if [[ "$source_file" == "UNKNOWN" ]]; then
-            source_file=$(echo "$coverage_output" | grep -oP '(?<=<file path=")[^"]+' | head -n 1)
+            source_file=$(grep -oP '(?<=<file path=")[^"]+' "$file" | head -n 1)
             source_file=$(basename "$source_file")
         fi
 
-        # Collect all lines needing coverage
-        echo "$coverage_output" | grep 'lineNumber="' | awk -F'"' '{print $2}' >> "$all_lines_file"
-
-        # Collect covered lines
-        echo "$coverage_output" | grep 'covered="true"' | awk -F'"' '{print $2}' >> "$covered_lines_file"
+        # Collect line numbers and coverage
+        grep 'lineNumber="' "$file" | awk -F'"' '{print $2}' >> "$all_lines_file"
+        grep 'covered="true"' "$file" | awk -F'"' '{print $2}' >> "$covered_lines_file"
     done
 
-    # Remove duplicates
+    # Sort and deduplicate
     sort -u "$all_lines_file" -o "$all_lines_file"
     sort -u "$covered_lines_file" -o "$covered_lines_file"
 
     # Compute uncovered lines
     comm -23 "$all_lines_file" "$covered_lines_file" > "$uncovered_lines_file"
 
-    # End the total timer
-    local end_total
-    end_total=$(date +%s%3N)
-    local total_elapsed_ms
-    total_elapsed_ms=$((end_total - start_total))
-    local total_elapsed_sec
-     total_elapsed_sec="$((total_elapsed_ms / 1000)).$(printf "%03d" $((total_elapsed_ms % 1000)))"
-
+    # Display coverage report
     echo ""
-    print_timing_line "⏱️  Total Runtime:" "$total_elapsed_sec"
-
     format_coverage_report "$source_file" "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
 
+    # Cleanup
     rm -f "$all_lines_file" "$covered_lines_file" "$uncovered_lines_file"
+    rm -rf "$coverage_dir"
 }
+
 
 
 

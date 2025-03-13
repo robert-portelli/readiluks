@@ -51,13 +51,17 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
+declare -gA INCONFIG=(
+    [TEST_FILE_SIZE]="1024M"
+    [TEST_FILES]=""
+    [TEST_DEVICES]=""
+)
 
 create_test_device() {
-    # Create a temporary image file
     local img_file
 
-    img_file="/tmp/readiluks-test-device-file.img"
-    truncate -s "${CONFIG[TEST_FILE_SIZE]}" "$img_file"
+    img_file="/tmp/readiluks-test-device-file-$(uuidgen | cut -c -5).img"
+    truncate -s "${INCONFIG[TEST_FILE_SIZE]}" "$img_file"
 
     # Create a loopback device on the host
     local loop_device
@@ -69,25 +73,25 @@ create_test_device() {
     fi
     echo "✅ Loopback device created: $loop_device"
 
-    CONFIG[TEST_FILE]="$img_file"
-    CONFIG[TEST_DEVICE]="$loop_device"
+    INCONFIG[TEST_FILE]="$img_file"
+    INCONFIG[TEST_DEVICE]="$loop_device"
 
 }
 
 cleanup_test_device() {
     echo "🧹 Cleaning up loopback device and image file..."
 
-    if losetup -j "${CONFIG[TEST_FILE]}" | grep -q "${CONFIG[TEST_DEVICE]}"; then
-        echo "Detaching loop device ${CONFIG[TEST_DEVICE]}..."
-        losetup -d "${CONFIG[TEST_DEVICE]}" || echo "❌ Failed to detach loop device"
+    if losetup -j "${INCONFIG[TEST_FILE]}" | grep -q "${INCONFIG[TEST_DEVICE]}"; then
+        echo "Detaching loop device ${INCONFIG[TEST_DEVICE]}..."
+        losetup -d "${INCONFIG[TEST_DEVICE]}" || echo "❌ Failed to detach loop device"
     fi
 
-    if [[ -f "${CONFIG[TEST_FILE]}" ]]; then
-        echo "Removing image file ${CONFIG[TEST_FILE]}..."
-        rm -f "${CONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
+    if [[ -f "${INCONFIG[TEST_FILE]}" ]]; then
+        echo "Removing image file ${INCONFIG[TEST_FILE]}..."
+        rm -f "${INCONFIG[TEST_FILE]}" || echo "❌ Failed to remove image file"
     fi
 
-    if losetup -l | grep -q "${CONFIG[TEST_DEVICE]}" || [[ -f "${CONFIG[TEST_FILE]}" ]]; then
+    if losetup -l | grep -q "${INCONFIG[TEST_DEVICE]}" || [[ -f "${INCONFIG[TEST_FILE]}" ]]; then
         echo "❌ Failed Test Device Cleanup"
         return 1
     fi
@@ -103,6 +107,7 @@ run_in_docker() {
     start_dind
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
+    # shellcheck disable=SC2153
     if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
         echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
         exit 1
@@ -115,8 +120,8 @@ run_in_docker() {
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
-        --device="${CONFIG[TEST_DEVICE]}" \
-        -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
+        --device="${INCONFIG[TEST_DEVICE]}" \
+        -e "TEST_DEVICE=${INCONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
         "${CONFIG[IMAGENAME]}" bash -c "$cmd")

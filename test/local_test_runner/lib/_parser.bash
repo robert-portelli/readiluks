@@ -52,6 +52,7 @@ parse_arguments() {
             --test) shift; CONFIG[TEST]="$1" ;;
             --coverage) CONFIG[COVERAGE]=true ;;
             --workflow) CONFIG[WORKFLOW]=true ;;
+            --parallel_1) CONFIG[PARALLEL_1]=true ;;
             --bats-flags) shift; CONFIG[BATS_FLAGS]="$1" ;;
             *) echo "Unknown option: $1"; exit 1 ;;
         esac

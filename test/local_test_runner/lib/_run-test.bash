@@ -90,7 +90,11 @@ run_test() {
                        cat \"\$kcov_dir/bats/sonarqube.xml\"")
 
         # Return the full coverage report (both covered and uncovered lines)
-        echo "$coverage_output"
+        if [[ -n "$COVERAGE_FILE" ]]; then
+            echo "$coverage_output" > "$COVERAGE_FILE"
+        else
+            echo "$coverage_output"
+        fi
     fi
 
     # Run workflow tests if --workflow was passed
