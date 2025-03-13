@@ -105,12 +105,14 @@
 declare -gA DEVCONFIG  # Declare the array but don't initialize it here
 
 _initialize_DEVCONFIG() {
+    local uuid
+    uuid="$(uuidgen | cut -c -5)"
     DEVCONFIG[TEST_DEVICE]=""  # Passed to container as env var in _run-in-docker.bash
     DEVCONFIG[LUKS_PW]="password"
-    DEVCONFIG[LUKS_LABEL]="TEST_LUKS"
+    DEVCONFIG[LUKS_LABEL]="TEST_LUKS_${uuid}"
     DEVCONFIG[MAPPED_DEVICE]=""  # Set by setup_luks(): /dev/mapper/LUKS_LABEL
-    DEVCONFIG[VG_NAME]="vgtest"
-    DEVCONFIG[LV_NAME]="lvtest"
+    DEVCONFIG[VG_NAME]="vgtest_${uuid}"
+    DEVCONFIG[LV_NAME]="lvtest_${uuid}"
     DEVCONFIG[MAPPED_LVM]=""  # Set by setup_lvm(): /dev/mapper/VG_NAME-LV_NAME
     DEVCONFIG[FS_TYPE]="btrfs"
     DEVCONFIG[MOUNT_POINT]="/mnt/target"
