@@ -28,7 +28,7 @@
 #   echo "Repo Base Directory: ${CONFIG[BASE_DIR]}"
 #
 #   # Retrieve the test image name
-#   echo "Using Docker image: ${CONFIG[IMAGENAME]}"
+#   echo "Using Docker image: ${CONFIG[HARNESS_IMAGE]}"
 #
 #   # Check if workflow mode is enabled
 #   if [[ "${CONFIG[WORKFLOW]}" == "true" ]]; then
@@ -54,8 +54,8 @@
 
 declare -gA CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-    [IMAGENAME]="robertportelli/test-readiluks-inner:latest"
-    [ACT_MAPPING]="ubuntu-latest=${CONFIG[IMAGENAME]}"
+    [HARNESS_IMAGE]="robertportelli/test-readiluks-inner:latest"
+    [ACT_MAPPING]="ubuntu-latest=${CONFIG[HARNESS_IMAGE]}"
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
