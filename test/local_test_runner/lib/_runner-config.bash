@@ -55,7 +55,7 @@
 declare -gA CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
     [IMAGENAME]="robertportelli/test-readiluks-inner:latest"
-    [DOCKERIMAGE]="ubuntu-latest=${CONFIG[IMAGENAME]}"
+    [ACT_MAPPING]="ubuntu-latest=${CONFIG[IMAGENAME]}"
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
