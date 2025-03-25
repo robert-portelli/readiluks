@@ -10,7 +10,7 @@
 #   - Starts a test container inside DinD (launched via a custom outer DinD container).
 #   - Creates a loopback device on the host using an image file to simulate a block device.
 #   - Passes the loopback device to the test container inside DinD for use in tests.
-#   - Ensures the required test image (`${CONFIG[IMAGENAME]}`) is available inside DinD
+#   - Ensures the required test image (`${CONFIG[HARNESS_IMAGE]}`) is available inside DinD
 #     before launching the test container.
 #   - Executes the provided command inside the test container and streams logs in real time.
 #   - Stops and removes the test container after execution to ensure a clean environment.
@@ -108,15 +108,15 @@ run_in_docker() {
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
     # shellcheck disable=SC2153
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside DinD. Aborting."
         exit 1
     fi
 
     create_test_device
 
     # Run the test container inside DinD and correctly capture its ID
-    CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
+    CONTAINER_ID=$(docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -124,7 +124,7 @@ run_in_docker() {
         -e "TEST_DEVICE=${INCONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash -c "$cmd")
+        "${CONFIG[HARNESS_IMAGE]}" bash -c "$cmd")
 
     # Ensure CONTAINER_ID is not empty
     if [[ -z "$CONTAINER_ID" ]]; then
@@ -133,10 +133,10 @@ run_in_docker() {
     fi
 
     # Attach to the container logs
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker logs -f "$CONTAINER_ID"
 
     # Ensure the test container is properly cleaned up after execution
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
     cleanup_test_device
 }
