@@ -1,5 +1,5 @@
 # ==============================================================================
-# Filename: test/local_test_runner/lib/_run-in-docker.bash
+# Filename: test/local_test_runner/lib/_run-inner-harness.bash
 # ------------------------------------------------------------------------------
 # Description:
 #   Manages the execution of a nested test container inside the outer Docker-in-Docker
@@ -26,7 +26,7 @@
 #       creates the test device, runs the test container, streams logs, and performs cleanup.
 #
 # Usage:
-#   source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
+#   source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
 #   run_in_docker "<command>"
 #
 # Example:
@@ -37,7 +37,7 @@
 #   - Requires `_manage_outer_docker.bash` to start and manage the outer DinD container.
 #   - Requires `_runner-config.bash` to initialize global configuration variables in CONFIG.
 #   - Docker must be installed and running on the host.
-#   - Assumes the DinD container is already running and ready, or `start_dind` will initialize it.
+#   - Assumes the DinD container is already running and ready, or `start_outer_container` will initialize it.
 #
 # Author:
 #   Robert Portelli
@@ -104,7 +104,7 @@ run_in_docker() {
     local cmd="$1"
 
     # Ensure DinD is running
-    start_dind
+    start_outer_container
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
     # shellcheck disable=SC2153
