@@ -2,8 +2,24 @@ FROM archlinux:base
 
 ENV container=docker
 
-RUN pacman -Syu --noconfirm systemd systemd-libs iproute2 iputils \
-    && pacman -Scc --noconfirm
+# Initialize and update keyring before running a full system upgrade
+RUN pacman-key --init && \
+    pacman-key --populate archlinux && \
+    pacman -Sy --noconfirm archlinux-keyring && \
+    pacman -Syu --noconfirm
+
+# Install required packages
+RUN pacman -S --noconfirm --needed \
+    act \
+    bats-assert bats-file bats-support \
+    nodejs npm \
+    kcov \
+    git \
+    lvm2 \
+    btrfs-progs \
+    parallel
+
+RUN pacman -Scc --noconfirm
 
 # Prepare for systemd boot
 STOPSIGNAL SIGRTMIN+3

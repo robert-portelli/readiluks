@@ -1,7 +1,7 @@
 build-inner-systemd:
 	docker buildx build --load \
-		-t robertportelli/readiluks-systemd-inner:latest \
-		-f docker/test/Dockerfile.inner-harness-harness-systemd .
+		-t robertportelli/readiluks-inner-systemd:latest \
+		-f docker/test/Dockerfile.inner-systemd .
 
 # 🌳 Show project structure
 tree:

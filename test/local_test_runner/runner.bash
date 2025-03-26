@@ -78,11 +78,22 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_runner-config.bash"
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
-    source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
+    #source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_run-inner-sysd.bash"
 }
 
-test_systemd_container() {
+test_inner_systemd_container() {
+    local source_file=""
+    local test_file="${CONFIG[BASE_DIR]}/test/local_test_runner/unit/inner_systemd_container/smoke_test.bats"
+    local workflow_event=""
+    local workflow_job=""
+
+    #file_check "$source_file" "$test_file" || return 1
+
+    run_test "$source_file" "$test_file" "$workflow_event" "$workflow_job"
+}
+xtest_systemd_container() {
     # point the outer container at the systemd container instead of test container
     CONFIG[HARNESS_IMAGE]="robertportelli/readiluks-systemd-inner:latest"
     # this is manual debugging test
