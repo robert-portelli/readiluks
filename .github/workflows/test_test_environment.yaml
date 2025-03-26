@@ -12,7 +12,7 @@ jobs:
   test-bats-common-setup:
     runs-on: ubuntu-latest
     container:
-      image: robertportelli/test-readiluks:latest
+      image: robertportelli/readiluks-inner-harness:latest
       options: --user root
     steps:
       - name: Check out Code

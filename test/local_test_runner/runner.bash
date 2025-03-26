@@ -51,7 +51,7 @@
 #   - Docker-in-Docker (DinD) image available:
 #       - `docker:dind` or custom-built from `docker/test/Dockerfile.outer`
 #   - Test container image available:
-#       - `robertportelli/test-readiluks:latest` or built from `docker/test/Dockerfile.inner`
+#       - `robertportelli/test-readiluks:latest` or built from `docker/test/Dockerfile.inner-harness-harness`
 #   - Inner test container must include BATS, kcov, and act.
 #   - Requires `kcov` for code coverage and `act` for GitHub Actions workflow simulations.
 #
@@ -78,9 +78,31 @@ load_libraries() {
     source "$BASEDIR/test/local_test_runner/lib/_runner-config.bash"
     source "$BASEDIR/test/local_test_runner/lib/_parser.bash"
     source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
-    source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
+    source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
     source "$BASEDIR/test/local_test_runner/lib/_run-test.bash"
-    source "$BASEDIR/test/local_test_runner/lib/_nested-docker-cleanup.bash"
+}
+
+test_systemd_container() {
+    # point the outer container at the systemd container instead of test container
+    CONFIG[HARNESS_IMAGE]="robertportelli/readiluks-systemd-inner:latest"
+    # this is manual debugging test
+    # Ensure DinD is running
+    start_outer_container
+
+    # Sanity check: Ensure the test-readiluks image exists inside DinD
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside DinD. Aborting."
+        exit 1
+    fi
+
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
+      --name inner-sysd \
+      --privileged \
+      --tmpfs /tmp --tmpfs /run --tmpfs /run/lock \
+      -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+      --cgroupns=host \
+      robertportelli/readiluks-systemd-inner:latest
+
 }
 
 test_coverage_fixture_with_q1_coverage() {
@@ -151,18 +173,18 @@ test_device_fixture() {
 test_dind_container() {
     # this is manual debugging test
     # Ensure DinD is running
-    start_dind
+    start_outer_container
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside DinD. Aborting."
         exit 1
     fi
 
     create_test_device
 
      # Run the test container inside DinD and correctly capture its ID
-    CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
+    CONTAINER_ID=$(docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -170,7 +192,7 @@ test_dind_container() {
         -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash -c "
+        "${CONFIG[HARNESS_IMAGE]}" bash -c "
             echo 'TEST_DEVICE in container: \$TEST_DEVICE';
             lsblk;
             ls -l /dev/loop*;
@@ -187,11 +209,11 @@ test_dind_container() {
     fi
 
     # Attach to the container logs
-    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+    docker exec -it "${CONFIG[OUTER_CONTAINER]}" docker logs -f "$CONTAINER_ID"
 
     # Ensure the test container is properly cleaned up after execution
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
 
     # Clean up the loopback device and image file
     trap EXIT INT TERM
@@ -202,11 +224,11 @@ test_dind_container() {
 test_container() {
     # this is manual debugging test
     # Ensure DinD is running
-    start_dind
+    start_outer_container
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside DinD. Aborting."
         exit 1
     fi
 
@@ -221,7 +243,7 @@ test_container() {
         -e "TEST_DEVICE=${CONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash
+        "${CONFIG[HARNESS_IMAGE]}" bash
 
         # Ensure CONTAINER_ID is not empty
     if [[ -z "$CONTAINER_ID" ]]; then
@@ -230,11 +252,11 @@ test_container() {
     fi
 
     # Attach to the container logs
-    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+    docker exec -it "${CONFIG[OUTER_CONTAINER]}" docker logs -f "$CONTAINER_ID"
 
     # Ensure the test container is properly cleaned up after execution
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
 
     # Clean up the loopback device and image file
     trap EXIT INT TERM
@@ -244,11 +266,11 @@ test_container() {
 # bash test/local_test_runner/runner.bash --test manual_nested_container
 manual_nested_container() {
     # this is manual debugging test
-    docker exec -it "${CONFIG[DIND_CONTAINER]}" docker run --rm -it \
+    docker exec -it "${CONFIG[OUTER_CONTAINER]}" docker run --rm -it \
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -w "/workspace" \
-        "${CONFIG[IMAGENAME]}" bash
+        "${CONFIG[HARNESS_IMAGE]}" bash
 }
 
 test_device_fixture_teardown_device() {
@@ -364,9 +386,6 @@ file_check() {
 main() {
     load_libraries
     parse_arguments "$@"
-
-    # Set cleanup trap immediately, ensuring cleanup happens even if something fails
-    trap 'nested_container_cleanup' EXIT
 
     # Ensure CONFIG[TEST] is a valid function before executing it
     if declare -F "${CONFIG[TEST]}" >/dev/null; then

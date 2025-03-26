@@ -41,7 +41,7 @@
 #
 # Requirements:
 #   - Must be sourced before calling `run_test()`.
-#   - Requires `_run-in-docker.bash` to manage container execution in DinD.
+#   - Requires `_run-inner-harness.bash` to manage container execution in DinD.
 #   - Requires `_runner-config.bash` to load the global `CONFIG` settings.
 #   - Requires BATS installed in the test container for shell script testing.
 #   - Requires kcov installed in the test container for coverage reporting.
@@ -78,14 +78,14 @@ run_test() {
     # Run unit tests if neither --coverage nor --workflow were passed
     if [[ "${CONFIG[COVERAGE]}" == "false" && "${CONFIG[WORKFLOW]}" == "false" ]]; then
         echo "🧪 Running BATS tests: ${test_file}"
-        run_in_docker "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
+        run_inner_harness "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
     fi
 
     # Run kcov inside Docker if --coverage is enabled
     if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
         echo "📊 Running coverage analysis..."
         local coverage_output
-        coverage_output=$(run_in_docker "kcov_dir=\$(mktemp -d) && \
+        coverage_output=$(run_inner_harness "kcov_dir=\$(mktemp -d) && \
                        kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' > /dev/null 2>&1 && \
                        cat \"\$kcov_dir/bats/sonarqube.xml\"")
 
@@ -100,9 +100,9 @@ run_test() {
     # Run workflow tests if --workflow was passed
     if [[ "${CONFIG[WORKFLOW]}" == "true" ]]; then
         echo "🚀 Running workflow tests for job: ${workflow_job}"
-        run_in_docker "act \
+        run_inner_harness "act \
                         '${workflow_event}' \
-                        -P ${CONFIG[DOCKERIMAGE]} \
+                        -P ${CONFIG[ACT_MAPPING]} \
                         --pull=false \
                         -j '${workflow_job}' \
                         --input bats-flags=${CONFIG[BATS_FLAGS]}"

@@ -1,5 +1,5 @@
 # ==============================================================================
-# Filename: test/local_test_runner/lib/_run-in-docker.bash
+# Filename: test/local_test_runner/lib/_run-inner-harness.bash
 # ------------------------------------------------------------------------------
 # Description:
 #   Manages the execution of a nested test container inside the outer Docker-in-Docker
@@ -10,7 +10,7 @@
 #   - Starts a test container inside DinD (launched via a custom outer DinD container).
 #   - Creates a loopback device on the host using an image file to simulate a block device.
 #   - Passes the loopback device to the test container inside DinD for use in tests.
-#   - Ensures the required test image (`${CONFIG[IMAGENAME]}`) is available inside DinD
+#   - Ensures the required test image (`${CONFIG[HARNESS_IMAGE]}`) is available inside DinD
 #     before launching the test container.
 #   - Executes the provided command inside the test container and streams logs in real time.
 #   - Stops and removes the test container after execution to ensure a clean environment.
@@ -21,23 +21,23 @@
 #       Creates a temporary image file, sets up a loopback device, and registers it in CONFIG.
 #   - cleanup_test_device:
 #       Detaches the loopback device, removes the temporary image file, and verifies cleanup.
-#   - run_in_docker:
+#   - run_inner_harness:
 #       Ensures DinD is running, verifies the test image exists inside DinD,
 #       creates the test device, runs the test container, streams logs, and performs cleanup.
 #
 # Usage:
-#   source "$BASEDIR/test/local_test_runner/lib/_run-in-docker.bash"
-#   run_in_docker "<command>"
+#   source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
+#   run_inner_harness "<command>"
 #
 # Example:
 #   # Run a Bats test suite inside the nested test container
-#   run_in_docker "bats test/unit/test_parser.bats"
+#   run_inner_harness "bats test/unit/test_parser.bats"
 #
 # Requirements:
 #   - Requires `_manage_outer_docker.bash` to start and manage the outer DinD container.
 #   - Requires `_runner-config.bash` to initialize global configuration variables in CONFIG.
 #   - Docker must be installed and running on the host.
-#   - Assumes the DinD container is already running and ready, or `start_dind` will initialize it.
+#   - Assumes the DinD container is already running and ready, or `start_outer_container` will initialize it.
 #
 # Author:
 #   Robert Portelli
@@ -100,23 +100,23 @@ cleanup_test_device() {
 }
 
 
-run_in_docker() {
+run_inner_harness() {
     local cmd="$1"
 
     # Ensure DinD is running
-    start_dind
+    start_outer_container
 
     # Sanity check: Ensure the test-readiluks image exists inside DinD
     # shellcheck disable=SC2153
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "❌ Image '${CONFIG[IMAGENAME]}' is missing inside DinD. Aborting."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside ${CONFIG[OUTER_CONTAINER]}. Aborting."
         exit 1
     fi
 
     create_test_device
 
     # Run the test container inside DinD and correctly capture its ID
-    CONTAINER_ID=$(docker exec "${CONFIG[DIND_CONTAINER]}" docker run -d \
+    CONTAINER_ID=$(docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
         --privileged --user root \
         -v "${CONFIG[BASE_DIR]}:${CONFIG[BASE_DIR]}:ro" \
         -v /var/run/docker.sock:/var/run/docker.sock \
@@ -124,7 +124,7 @@ run_in_docker() {
         -e "TEST_DEVICE=${INCONFIG[TEST_DEVICE]}" \
         -w "${CONFIG[BASE_DIR]}" \
         --user "$(id -u):$(id -g)" \
-        "${CONFIG[IMAGENAME]}" bash -c "$cmd")
+        "${CONFIG[HARNESS_IMAGE]}" bash -c "$cmd")
 
     # Ensure CONTAINER_ID is not empty
     if [[ -z "$CONTAINER_ID" ]]; then
@@ -133,10 +133,10 @@ run_in_docker() {
     fi
 
     # Attach to the container logs
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker logs -f "$CONTAINER_ID"
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker logs -f "$CONTAINER_ID"
 
     # Ensure the test container is properly cleaned up after execution
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
-    docker exec "${CONFIG[DIND_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker stop "$CONTAINER_ID" > /dev/null 2>&1
+    docker exec "${CONFIG[OUTER_CONTAINER]}" docker rm -f "$CONTAINER_ID" > /dev/null 2>&1
     cleanup_test_device
 }

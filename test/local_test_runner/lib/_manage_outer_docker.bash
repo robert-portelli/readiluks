@@ -10,7 +10,7 @@
 #   - Starts the outer DinD container (using a custom Dockerfile) if it is not already running.
 #   - Builds the DinD image from `docker/test/Dockerfile.outer` if it does not exist.
 #   - Waits for the Docker daemon inside DinD to become ready before proceeding.
-#   - Ensures the test image (`${CONFIG[IMAGENAME]}`) is available inside DinD by:
+#   - Ensures the test image (`${CONFIG[HARNESS_IMAGE]}`) is available inside DinD by:
 #       * Checking for the image inside DinD.
 #       * Building the image locally if it doesn't exist.
 #       * Pulling the image from Docker Hub as a fallback if build fails.
@@ -24,18 +24,18 @@
 #
 # Usage:
 #   source "$BASEDIR/test/local_test_runner/lib/_manage_outer_docker.bash"
-#   start_dind
+#   start_outer_container
 #
 # Example(s):
 #   # Ensure DinD is running and the test image is available
-#   start_dind
+#   start_outer_container
 #
 # Requirements:
-#   - Must be sourced before calling `start_dind()`.
+#   - Must be sourced before calling `start_outer_container()`.
 #   - Requires Docker to be installed and running on the host.
 #   - Assumes the DinD container is used for executing nested test containers.
-#   - Relies on `${CONFIG[DIND_IMAGE]}`, `${CONFIG[DIND_CONTAINER]}`, and related variables
-#     to be properly initialized before invoking `start_dind()`.
+#   - Relies on `${CONFIG[OUTER_IMAGE]}`, `${CONFIG[OUTER_CONTAINER]}`, and related variables
+#     to be properly initialized before invoking `start_outer_container()`.
 #
 # Author:
 #   Robert Portelli
@@ -49,62 +49,122 @@
 #   See repository commit history (e.g., `git log`).
 # ==============================================================================
 
-start_dind() {
+start_outer_container() {
     echo "🚀 Ensuring Outer Docker-in-Docker container is running..."
 
-    # Check if the DinD image exists, build if necessary
-    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[DIND_IMAGE]}"; then
-        echo "🔧 Building DinD image..."
-        docker build --load -t "${CONFIG[DIND_IMAGE]}" -f "${CONFIG[DIND_FILE]}" .
+    # Check if the outer image exists, build if necessary
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[OUTER_IMAGE]}"; then
+        echo "🔧 Building Outer image..."
+        docker build --load -t "${CONFIG[OUTER_IMAGE]}" -f "${CONFIG[OUTER_DOCKERFILE]}" .
     fi
 
-    # Start DinD container if not already running
-    if ! docker ps --format "{{.Names}}" | grep -q "${CONFIG[DIND_CONTAINER]}"; then
+    # Start outer container if not already running
+    if ! docker ps --format "{{.Names}}" | grep -q "${CONFIG[OUTER_CONTAINER]}"; then
         docker run --rm -d \
             --privileged \
             -v "$(pwd):${CONFIG[BASE_DIR]}:ro" \
-            --name "${CONFIG[DIND_CONTAINER]}" \
-            "${CONFIG[DIND_IMAGE]}"
+            --name "${CONFIG[OUTER_CONTAINER]}" \
+            "${CONFIG[OUTER_IMAGE]}"
     fi
 
     # Wait until Docker daemon inside DinD is ready
-    until docker exec "${CONFIG[DIND_CONTAINER]}" docker info >/dev/null 2>&1; do
-        echo "⌛ Waiting for DinD to start..."
+    until docker exec "${CONFIG[OUTER_CONTAINER]}" docker info >/dev/null 2>&1; do
+        echo "⌛ Waiting for ${CONFIG[OUTER_CONTAINER]} to start..."
         sleep 1
     done
 
-    echo "✅ DinD is ready!"
+    echo "✅ ${CONFIG[OUTER_CONTAINER]} is ready!"
 
+    load_harness_image
+    load_systemd_image
+    start_systemd_container
+}
 
-    # Ensure the test image is inside DinD
-    if ! docker exec "${CONFIG[DIND_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-        echo "📦 ${CONFIG[IMAGENAME]} not found in DinD. Preparing to transfer..."
+start_systemd_container() {
+    echo "🧪 Ensuring long-running systemd container is running..."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker ps --format "{{.Names}}" | grep -q "${CONFIG[SYSTEMD_CONTAINER]}"; then
+        docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
+            --privileged \
+            --tmpfs /tmp --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            --cgroupns=host \
+            --name "${CONFIG[SYSTEMD_CONTAINER]}" \
+            "${CONFIG[SYSTEMD_IMAGE]}"
+        echo "✅ Systemd container started."
+        echo "⏳ Waiting for systemd to become ready in container..."
+        for i in {1..10}; do
+            status=$(docker exec "${CONFIG[OUTER_CONTAINER]}" \
+                docker exec "${CONFIG[SYSTEMD_CONTAINER]}" systemctl is-system-running 2>/dev/null || true)
 
-        # Check if the image exists locally
-        if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[IMAGENAME]}"; then
-            echo "⚠️  Image ${CONFIG[IMAGENAME]} not found locally. Attempting to build first..."
+            if [[ "$status" == "running" ]]; then
+                echo "✅ systemd is fully running."
+                return 0
+            fi
 
-            # Try to build the image locally first
-            if ! docker build --load -t "${CONFIG[IMAGENAME]}" -f docker/test/Dockerfile.inner .; then
+            echo "   ⌛ systemd state: ${status:-unavailable}, retrying ($i/10)..."
+            sleep 1
+        done
+
+        echo "❌ systemd failed to become ready after 10 seconds."
+        return 1
+    else
+        echo "✅ Systemd container already running."
+    fi
+
+}
+
+load_harness_image() {
+    local image="${CONFIG[HARNESS_IMAGE]}"
+    echo "📦 Checking for harness image: ${image}"
+
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
+        echo "📦 ${image} not found in Outer container: ${CONFIG[OUTER_CONTAINER]}. Preparing to transfer..."
+
+        if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
+            echo "⚠️  Image ${image} not found locally. Attempting to build first..."
+            if ! docker build --load -t "${image}" -f docker/test/Dockerfile.inner-harness .; then
                 echo "❌ Build failed. Attempting to pull from Docker Hub..."
-
-                # If build fails, attempt to pull from Docker Hub
-                if ! docker pull "${CONFIG[IMAGENAME]}"; then
-                    echo "❌ Failed to build or pull ${CONFIG[IMAGENAME]}. Aborting image transfer."
+                docker pull "${image}" || {
+                    echo "❌ Failed to build or pull ${image}. Aborting image transfer."
                     exit 1
-                fi
+                }
             fi
         fi
 
-        # At this point, the image must exist locally, so transfer it into DinD
-        echo "📦 Transferring ${CONFIG[IMAGENAME]} to DinD..."
-        docker save -o test-readiluks.tar "${CONFIG[IMAGENAME]}"
-        docker cp test-readiluks.tar "${CONFIG[DIND_CONTAINER]}:/test-readiluks.tar"
-        docker exec "${CONFIG[DIND_CONTAINER]}" docker load -i /test-readiluks.tar
-        echo "✅ Image ${CONFIG[IMAGENAME]} is now available inside DinD!"
-        rm -f test-readiluks.tar  # Cleanup local tar file
-
+        docker save -o test-readiluks-harness.tar "${image}"
+        docker cp test-readiluks-harness.tar "${CONFIG[OUTER_CONTAINER]}:/test-readiluks-harness.tar"
+        docker exec "${CONFIG[OUTER_CONTAINER]}" docker load -i /test-readiluks-harness.tar
+        rm -f test-readiluks-harness.tar
+        echo "✅ Image ${image} is now available inside DinD!"
     else
-        echo "✅ Image ${CONFIG[IMAGENAME]} already exists inside DinD."
+        echo "✅ Image ${image} already exists inside DinD."
+    fi
+}
+
+load_systemd_image() {
+    local image="${CONFIG[SYSTEMD_IMAGE]}"
+    echo "📦 Checking for systemd image: ${image}"
+
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
+        echo "📦 ${image} not found in Outer container: ${CONFIG[OUTER_CONTAINER]}. Preparing to transfer..."
+
+        if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
+            echo "⚠️  Image ${image} not found locally. Attempting to build first..."
+            if ! docker build --load -t "${image}" -f docker/test/Dockerfile.inner-systemd .; then
+                echo "❌ Build failed. Attempting to pull from Docker Hub..."
+                docker pull "${image}" || {
+                    echo "❌ Failed to build or pull ${image}. Aborting image transfer."
+                    exit 1
+                }
+            fi
+        fi
+
+        docker save -o test-readiluks-systemd.tar "${image}"
+        docker cp test-readiluks-systemd.tar "${CONFIG[OUTER_CONTAINER]}:/test-readiluks-systemd.tar"
+        docker exec "${CONFIG[OUTER_CONTAINER]}" docker load -i /test-readiluks-systemd.tar
+        rm -f test-readiluks-systemd.tar
+        echo "✅ Image ${image} is now available inside DinD!"
+    else
+        echo "✅ Image ${image} already exists inside DinD."
     fi
 }

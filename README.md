@@ -87,7 +87,7 @@ docker buildx build --load -t test-readiluks-outer -f docker/test/Dockerfile.out
 
 #### Build the inner test container
 ```bash
-docker buildx build --load -t robertportelli/test-readiluks-inner:latest -f docker/test/Dockerfile.inner .
+docker buildx build --load -t robertportelli/readiluks-inner-harness:latest -f docker/test/Dockerfile.inner-harness-harness .
 ```
 ---
 ## 🧪 Running Tests
@@ -141,7 +141,7 @@ bash test/local_test_runner/runner.bash --test manual_nested_container
 ├── README.md
 ├── docker
 │   └── test
-│       ├── Dockerfile.inner                  # Inner test container (Arch Linux + BATS + kcov + act)
+│       ├── Dockerfile.inner-harness-harness                  # Inner test container (Arch Linux + BATS + kcov + act)
 │       └── Dockerfile.outer                  # Outer DinD container managing nested Docker
 ├── src
 │   ├── lib
@@ -168,9 +168,8 @@ bash test/local_test_runner/runner.bash --test manual_nested_container
     │   │   ├── _coverage.bash               # pytest-cov style coverage reporting for Bash
     │   │   ├── _device_fixture.bash         # Device lifecycle: loop -> LUKS -> LVM -> FS
     │   │   ├── _manage_outer_docker.bash    # Starts outer DinD container and loads test images
-    │   │   ├── _nested-docker-cleanup.bash  # Cleans up nested containers inside DinD
     │   │   ├── _parser.bash                 # Parses test runner flags
-    │   │   ├── _run-in-docker.bash          # Runs individual tests inside nested Docker
+    │   │   ├── _run-inner-harness.bash          # Runs individual tests inside nested Docker
     │   │   ├── _run-test.bash               # Manages which tests run (unit, integration, workflow)
     │   │   └── _runner-config.bash          # Global CONFIG for tests
     │   ├── runner.bash                      # Orchestrates test executions

@@ -24,7 +24,7 @@ jobs:
   unit-test-parser:
     runs-on: ubuntu-latest
     container:
-      image: robertportelli/test-readiluks:latest
+      image: robertportelli/readiluks-inner-harness:latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
   integration-test-parser:
     runs-on: ubuntu-latest
     container:
-      image: robertportelli/test-readiluks:latest
+      image: robertportelli/readiluks-inner-harness:latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
