@@ -21,17 +21,17 @@
 #       Creates a temporary image file, sets up a loopback device, and registers it in CONFIG.
 #   - cleanup_test_device:
 #       Detaches the loopback device, removes the temporary image file, and verifies cleanup.
-#   - run_in_docker:
+#   - run_inner_harness:
 #       Ensures DinD is running, verifies the test image exists inside DinD,
 #       creates the test device, runs the test container, streams logs, and performs cleanup.
 #
 # Usage:
 #   source "$BASEDIR/test/local_test_runner/lib/_run-inner-harness.bash"
-#   run_in_docker "<command>"
+#   run_inner_harness "<command>"
 #
 # Example:
 #   # Run a Bats test suite inside the nested test container
-#   run_in_docker "bats test/unit/test_parser.bats"
+#   run_inner_harness "bats test/unit/test_parser.bats"
 #
 # Requirements:
 #   - Requires `_manage_outer_docker.bash` to start and manage the outer DinD container.
@@ -100,7 +100,7 @@ cleanup_test_device() {
 }
 
 
-run_in_docker() {
+run_inner_harness() {
     local cmd="$1"
 
     # Ensure DinD is running
