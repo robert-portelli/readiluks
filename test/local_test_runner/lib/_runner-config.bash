@@ -10,8 +10,8 @@
 #   - Standardizes test execution options (unit, integration, workflow, coverage).
 #   - Manages Docker-in-Docker (DinD) setup for isolated testing.
 #   - Provides a single source of truth for image and container names.
-#   - Defines the **inner test container** (`robertportelli/test-readiluks-inner:latest`)
-#     built from `docker/test/Dockerfile.inner`.
+#   - Defines the **inner test container** (`robertportelli/readiluks-inner-harness:latest`)
+#     built from `docker/test/Dockerfile.inner-harness-harness`.
 #   - Defines the **outer DinD container** (`test-readiluks-outer`) with customizations
 #     from `docker/test/Dockerfile.outer`.
 #
@@ -54,15 +54,16 @@
 
 declare -gA CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-    [HARNESS_IMAGE]="robertportelli/test-readiluks-inner:latest"
+    [HARNESS_IMAGE]="robertportelli/readiluks-inner-harness:latest"
+    [SYSTEMD_IMAGE]="robertportelli/readiluks-inner-systemd:latest"
     [ACT_MAPPING]="ubuntu-latest=${CONFIG[HARNESS_IMAGE]}"
     [TEST]=""
     [COVERAGE]=false
     [WORKFLOW]=false
     [BATS_FLAGS]=""
-    [DIND_FILE]="docker/test/Dockerfile.outer"
-    [DIND_IMAGE]="test-readiluks-outer"
-    [DIND_CONTAINER]="test-readiluks-outer-container"
+    [OUTER_DOCKERFILE]="docker/test/Dockerfile.outer"
+    [OUTER_IMAGE]="test-readiluks-outer"
+    [OUTER_CONTAINER]="test-readiluks-outer-container"
 )
 
 #    [TEST_FILE_SIZE]="1024M"
