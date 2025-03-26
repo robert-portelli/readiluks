@@ -52,13 +52,13 @@
 start_outer_container() {
     echo "🚀 Ensuring Outer Docker-in-Docker container is running..."
 
-    # Check if the DinD image exists, build if necessary
+    # Check if the outer image exists, build if necessary
     if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[OUTER_IMAGE]}"; then
-        echo "🔧 Building DinD image..."
+        echo "🔧 Building Outer image..."
         docker build --load -t "${CONFIG[OUTER_IMAGE]}" -f "${CONFIG[OUTER_DOCKERFILE]}" .
     fi
 
-    # Start DinD container if not already running
+    # Start outer container if not already running
     if ! docker ps --format "{{.Names}}" | grep -q "${CONFIG[OUTER_CONTAINER]}"; then
         docker run --rm -d \
             --privileged \
@@ -93,7 +93,7 @@ load_harness_image() {
     echo "📦 Checking for harness image: ${image}"
 
     if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
-        echo "📦 ${image} not found in DinD. Preparing to transfer..."
+        echo "📦 ${image} not found in Outer container: ${CONFIG[OUTER_CONTAINER]}. Preparing to transfer..."
 
         if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
             echo "⚠️  Image ${image} not found locally. Attempting to build first..."
@@ -121,7 +121,7 @@ load_systemd_image() {
     echo "📦 Checking for systemd image: ${image}"
 
     if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
-        echo "📦 ${image} not found in DinD. Preparing to transfer..."
+        echo "📦 ${image} not found in Outer container: ${CONFIG[OUTER_CONTAINER]}. Preparing to transfer..."
 
         if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}"; then
             echo "⚠️  Image ${image} not found locally. Attempting to build first..."

@@ -107,7 +107,7 @@ declare -gA DEVCONFIG  # Declare the array but don't initialize it here
 _initialize_DEVCONFIG() {
     local uuid
     uuid="$(uuidgen | cut -c -5)"
-    DEVCONFIG[TEST_DEVICE]=""  # Passed to container as env var in _run-in-docker.bash
+    DEVCONFIG[TEST_DEVICE]=""  # Passed to container as env var in _run-inner-harness.bash
     DEVCONFIG[LUKS_PW]="password"
     DEVCONFIG[LUKS_LABEL]="TEST_LUKS_${uuid}"
     DEVCONFIG[MAPPED_DEVICE]=""  # Set by setup_luks(): /dev/mapper/LUKS_LABEL

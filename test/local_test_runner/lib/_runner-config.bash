@@ -67,5 +67,5 @@ declare -gA CONFIG=(
 )
 
 #    [TEST_FILE_SIZE]="1024M"
-#    [TEST_FILE]="" # set by _run-in-docker.bash
-#    [TEST_DEVICE]="" # set by _run-in-docker.bash
+#    [TEST_FILE]="" # set by _run-inner-harness.bash
+#    [TEST_DEVICE]="" # set by _run-inner-harness.bash

@@ -109,7 +109,7 @@ run_inner_harness() {
     # Sanity check: Ensure the test-readiluks image exists inside DinD
     # shellcheck disable=SC2153
     if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "${CONFIG[HARNESS_IMAGE]}"; then
-        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside DinD. Aborting."
+        echo "❌ Image '${CONFIG[HARNESS_IMAGE]}' is missing inside ${CONFIG[OUTER_CONTAINER]}. Aborting."
         exit 1
     fi
 
