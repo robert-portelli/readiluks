@@ -56,6 +56,7 @@ declare -gA CONFIG=(
     [BASE_DIR]="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
     [HARNESS_IMAGE]="robertportelli/readiluks-inner-harness:latest"
     [SYSTEMD_IMAGE]="robertportelli/readiluks-inner-systemd:latest"
+    [SYSTEMD_CONTAINER]="inner-sysd"
     [ACT_MAPPING]="ubuntu-latest=${CONFIG[HARNESS_IMAGE]}"
     [TEST]=""
     [COVERAGE]=false

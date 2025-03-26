@@ -77,15 +77,40 @@ start_outer_container() {
 
     load_harness_image
     load_systemd_image
+    start_systemd_container
+}
 
-    echo "🧪 Starting long-running systemd container..."
-    docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
-        --privileged \
-        --tmpfs /tmp --tmpfs /run --tmpfs /run/lock \
-        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
-        --cgroupns=host \
-        --name "${CONFIG[SYSTEMD_CONTAINER]}" \
-        "${CONFIG[SYSTEMD_IMAGE]}"
+start_systemd_container() {
+    echo "🧪 Ensuring long-running systemd container is running..."
+    if ! docker exec "${CONFIG[OUTER_CONTAINER]}" docker ps --format "{{.Names}}" | grep -q "${CONFIG[SYSTEMD_CONTAINER]}"; then
+        docker exec "${CONFIG[OUTER_CONTAINER]}" docker run -d \
+            --privileged \
+            --tmpfs /tmp --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            --cgroupns=host \
+            --name "${CONFIG[SYSTEMD_CONTAINER]}" \
+            "${CONFIG[SYSTEMD_IMAGE]}"
+        echo "✅ Systemd container started."
+        echo "⏳ Waiting for systemd to become ready in container..."
+        for i in {1..10}; do
+            status=$(docker exec "${CONFIG[OUTER_CONTAINER]}" \
+                docker exec "${CONFIG[SYSTEMD_CONTAINER]}" systemctl is-system-running 2>/dev/null || true)
+
+            if [[ "$status" == "running" ]]; then
+                echo "✅ systemd is fully running."
+                return 0
+            fi
+
+            echo "   ⌛ systemd state: ${status:-unavailable}, retrying ($i/10)..."
+            sleep 1
+        done
+
+        echo "❌ systemd failed to become ready after 10 seconds."
+        return 1
+    else
+        echo "✅ Systemd container already running."
+    fi
+
 }
 
 load_harness_image() {
