@@ -75,9 +75,9 @@ start_outer_container() {
 
     echo "✅ ${CONFIG[OUTER_CONTAINER]} is ready!"
 
-    load_harness_image
+    #load_harness_image
     load_systemd_image
-    start_systemd_container
+    #start_systemd_container
 }
 
 start_systemd_container() {
