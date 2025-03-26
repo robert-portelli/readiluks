@@ -1,3 +1,8 @@
+build-inner-systemd:
+	docker buildx build --load \
+		-t robertportelli/readiluks-systemd-inner:latest \
+		-f docker/test/Dockerfile.inner-harness-harness-systemd .
+
 # 🌳 Show project structure
 tree:
 	@tree --prune -a -I "*~|*.bak|.git"
