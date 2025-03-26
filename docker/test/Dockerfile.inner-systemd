@@ -1,0 +1,29 @@
+FROM archlinux:base
+
+ENV container=docker
+
+RUN pacman -Syu --noconfirm systemd systemd-libs iproute2 iputils \
+    && pacman -Scc --noconfirm
+
+# Prepare for systemd boot
+STOPSIGNAL SIGRTMIN+3
+
+VOLUME [ "/sys/fs/cgroup" ]
+
+# This ensures journald doesn't hang waiting for tty
+RUN sed -i 's/#LogLevel=info/LogLevel=debug/' /etc/systemd/journald.conf
+
+# Mask services that are known to fail in Docker
+RUN systemctl mask \
+    systemd-firstboot.service \
+    systemd-udevd \
+    systemd-udev-trigger \
+    systemd-journald-audit.socket \
+    getty@.service \
+    console-getty.service \
+    systemd-remount-fs.service \
+    systemd-sysctl.service \
+    systemd-tmpfiles-setup.service \
+    systemd-tmpfiles-clean.timer
+
+CMD ["/usr/lib/systemd/systemd"]
