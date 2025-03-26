@@ -78,14 +78,14 @@ run_test() {
     # Run unit tests if neither --coverage nor --workflow were passed
     if [[ "${CONFIG[COVERAGE]}" == "false" && "${CONFIG[WORKFLOW]}" == "false" ]]; then
         echo "🧪 Running BATS tests: ${test_file}"
-        run_inner_harness "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
+        run_systemd_container "bats '${CONFIG[BATS_FLAGS]}' '${test_file}'"
     fi
 
     # Run kcov inside Docker if --coverage is enabled
     if [[ "${CONFIG[COVERAGE]}" == "true" ]]; then
         echo "📊 Running coverage analysis..."
         local coverage_output
-        coverage_output=$(run_inner_harness "kcov_dir=\$(mktemp -d) && \
+        coverage_output=$(run_systemd_container "kcov_dir=\$(mktemp -d) && \
                        kcov --clean --include-path='${source_file}' \"\$kcov_dir\" bats '${test_file}' > /dev/null 2>&1 && \
                        cat \"\$kcov_dir/bats/sonarqube.xml\"")
 
@@ -100,7 +100,7 @@ run_test() {
     # Run workflow tests if --workflow was passed
     if [[ "${CONFIG[WORKFLOW]}" == "true" ]]; then
         echo "🚀 Running workflow tests for job: ${workflow_job}"
-        run_inner_harness "act \
+        run_systemd_container "act \
                         '${workflow_event}' \
                         -P ${CONFIG[ACT_MAPPING]} \
                         --pull=false \
